@@ -6,6 +6,7 @@ import {
   PaymentBreakdown,
   PaymentMethodSplit,
   IncomeSource,
+  PurchaseOrderStatus,
 } from "../types";
 import {
   PencilIcon,
@@ -16,6 +17,9 @@ import {
   CogIcon,
   PlusIcon,
   GoogleDriveIcon,
+  SearchIcon,
+  ExportIcon,
+  InventoryIcon,
 } from "./icons";
 import Modal from "./Modal";
 
@@ -283,16 +287,24 @@ const CashFlow: React.FC<CashFlowProps> = ({
     setCurrentSession((prev) => {
       const updatedExpenses = prev.expenses.filter((_, i) => i !== index);
 
-      // Shift the input values
+      // CORRECCIÓN DE LÓGICA: Reconstruir las claves de los inputs de string de gastos
       setExpenseInputValues((prevValues) => {
         const newValues: Record<number, string> = {};
-        updatedExpenses.forEach((_, i) => {
-          if (i < index) {
-            newValues[i] = prevValues[i];
-          } else {
-            newValues[i] = prevValues[i + 1];
+
+        // Iteramos sobre las claves antiguas para reconstruir las nuevas
+        Object.keys(prevValues).forEach((oldKeyStr) => {
+          const oldKey = parseInt(oldKeyStr);
+
+          if (oldKey < index) {
+            // Mantener la clave para los elementos antes del índice eliminado
+            newValues[oldKey] = prevValues[oldKey];
+          } else if (oldKey > index) {
+            // Desplazar la clave hacia la izquierda (k-1)
+            newValues[oldKey - 1] = prevValues[oldKey];
           }
+          // Si oldKey === index, el elemento se omite.
         });
+
         return newValues;
       });
 
@@ -447,6 +459,12 @@ const CashFlow: React.FC<CashFlowProps> = ({
         <div className="bg-slate-900/50 p-4 rounded-md mt-4 overflow-x-auto">
           <div className="flex justify-between items-center mb-3">
             <h3 className="text-lg font-bold text-white">Desglose de Caja</h3>
+            <button
+              onClick={openConceptsModal}
+              className="text-indigo-400 text-sm flex items-center gap-1 hover:text-indigo-300 transition-colors"
+            >
+              <CogIcon className="h-4 w-4" /> Configurar
+            </button>
           </div>
           <table className="min-w-full">
             <thead>
@@ -796,7 +814,7 @@ const CashFlow: React.FC<CashFlowProps> = ({
 
       {isDriveModalOpen && (
         <Modal
-          title="Conectar con Google Drive"
+          title="Conectar Google Drive"
           onClose={() => setDriveModalOpen(false)}
           onSave={() => {}}
         >

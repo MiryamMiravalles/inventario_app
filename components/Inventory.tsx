@@ -16,6 +16,7 @@ import {
   ChevronDownIcon,
   ExportIcon,
   SearchIcon,
+  InventoryIcon,
 } from "./icons";
 import { INVENTORY_LOCATIONS } from "../constants";
 
@@ -32,6 +33,7 @@ interface InventoryProps {
     updates: { name: string; stock: number }[]
   ) => void;
   onSaveInventoryRecord: (record: InventoryRecord) => void;
+  onDeleteAllInventoryRecords: () => void; // Prop para borrar todo
 }
 
 const emptyInventoryItem: Omit<InventoryItem, "id" | "stockByLocation"> = {
@@ -143,12 +145,11 @@ const CategoryAccordion: React.FC<CategoryAccordionProps> = ({
 // --- COMPONENTE DE ANÁLISIS SEMANAL ---
 interface WeeklyConsumptionAnalysisProps {
   inventoryHistory: InventoryRecord[];
-  exportInventoryRecordToCSV: (record: InventoryRecord) => void;
+  // exportInventoryRecordToCSV se elimina de props
 }
 
 const WeeklyConsumptionAnalysis: React.FC<WeeklyConsumptionAnalysisProps> = ({
   inventoryHistory,
-  exportInventoryRecordToCSV,
 }) => {
   // Obtiene el registro más reciente
   const lastRecord = useMemo(() => {
@@ -182,13 +183,7 @@ const WeeklyConsumptionAnalysis: React.FC<WeeklyConsumptionAnalysisProps> = ({
           Consumo de la Última Semana (Finalizado en:{" "}
           {new Date(lastRecord.date).toLocaleDateString("es-ES")})
         </h2>
-        <button
-          onClick={() => exportInventoryRecordToCSV(lastRecord)}
-          className="bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2 transition duration-300 flex-shrink-0"
-        >
-          <ExportIcon />
-          Exportar Análisis
-        </button>
+        {/* Se eliminó el botón de Exportar Análisis */}
       </div>
 
       {consumptionItems.length > 0 ? (
@@ -243,6 +238,7 @@ const InventoryComponent: React.FC<InventoryProps> = ({
   onDeletePurchaseOrder,
   onBulkUpdateInventoryItems,
   onSaveInventoryRecord,
+  onDeleteAllInventoryRecords, // Propiedad de borrado total
 }) => {
   const [activeTab, setActiveTab] = useState<
     "inventory" | "orders" | "analysis" | "history"
@@ -285,6 +281,11 @@ const InventoryComponent: React.FC<InventoryProps> = ({
 
   // Estado para la búsqueda de productos en el modal de Pedido
   const [orderSearchTerm, setOrderSearchTerm] = useState("");
+
+  // NUEVO ESTADO: Registro de historial seleccionado para ver detalles
+  const [viewingRecord, setViewingRecord] = useState<InventoryRecord | null>(
+    null
+  );
 
   // Asegura que el historial esté en un array válido y ordenado por fecha descendente (más reciente primero)
   const validInventoryHistory = useMemo(() => {
@@ -458,6 +459,7 @@ const InventoryComponent: React.FC<InventoryProps> = ({
         costAtTimeOfPurchase: 0,
       })),
       totalAmount: 0,
+      status: PurchaseOrderStatus.Completed, // Se fuerza el estado a Completed
     };
     onSavePurchaseOrder({
       id: (currentPurchaseOrder as PurchaseOrder).id || crypto.randomUUID(),
@@ -572,6 +574,7 @@ const InventoryComponent: React.FC<InventoryProps> = ({
     setEndOfWeekStock((prev) => ({ ...prev, [itemId]: value }));
   };
 
+  // --- Guardar Análisis de Consumo (Pestaña Análisis) ---
   const handleSaveCurrentInventory = () => {
     if (inventoryItems.length === 0) {
       alert("No hay artículos en el inventario para guardar.");
@@ -620,110 +623,181 @@ const InventoryComponent: React.FC<InventoryProps> = ({
       onBulkUpdateInventoryItems(updatesForInventory);
     }
 
-    // 3. Guarda el Análisis en el Historial
+    // 3. Guarda el Análisis en el Historial con la etiqueta específica
+    const formattedDate = new Date(analysisDate).toLocaleDateString("es-ES", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
+
     const newRecord: InventoryRecord = {
       id: crypto.randomUUID(),
       date: new Date(analysisDate).toISOString(),
+      label: `Análisis de consumo (${formattedDate})`, // ETIQUETA: Análisis de Consumo
       items: recordItems,
     };
 
     onSaveInventoryRecord(newRecord);
     alert(
-      `Análisis de inventario para el ${new Date(
-        analysisDate
-      ).toLocaleDateString()} y el stock actualizado correctamente.`
+      `Análisis de consumo (${formattedDate}) guardado y el stock actualizado correctamente.`
     );
 
     // 4. Resetear los valores de entrada para la próxima semana
     setEndOfWeekStock({});
   };
 
-  const exportCurrentInventoryToCSV = () => {
-    if (!inventoryItems || inventoryItems.length === 0) {
-      alert("No hay artículos en el inventario para exportar.");
+  // --- Guardar Inventario (Snapshot - Pestaña Inventario) ---
+  const handleSaveInventorySnapshot = () => {
+    if (inventoryItems.length === 0) {
+      alert("No hay artículos en el inventario para guardar.");
       return;
     }
 
-    const headers = [
-      "Categoría",
-      "Artículo",
-      ...INVENTORY_LOCATIONS,
-      "Stock Total",
-      "Unidad",
-    ];
-
-    const sortedRows = inventoryItems
-      .sort((a, b) => {
-        const catComp = a.category.localeCompare(b.category);
-        if (catComp !== 0) return catComp;
-        return a.name.localeCompare(b.name);
-      })
-      .map((item) => {
-        const totalStock = calculateTotalStock(item);
-        const locationStocks = INVENTORY_LOCATIONS.map((loc) =>
-          (item.stockByLocation?.[loc] || 0).toString().replace(".", ",")
-        );
-
-        const rowData = [
-          `"${item.category.replace(/"/g, '""')}"`,
-          `"${item.name.replace(/"/g, '""')}"`,
-          ...locationStocks,
-          totalStock.toString().replace(".", ","),
-          item.unit,
-        ];
-        return rowData.join(";");
-      });
-
-    const csvContent =
-      "data:text/csv;charset=utf-8," +
-      [headers.join(";"), ...sortedRows].join("\n");
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    const dateStr = new Date().toLocaleDateString("es-ES").replace(/\//g, "-");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `inventario_actual_${dateStr}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
-  const exportInventoryRecordToCSV = (record: InventoryRecord) => {
-    const headers = [
-      "Artículo",
-      "Unidad",
-      "Stock Actual",
-      "En Pedidos",
-      "Stock Inicial",
-      "Stock Final",
-      "Consumo",
-    ];
-    const rows = (record.items as any[]).map((item) => {
-      // Using 'as any[]' for safety with casting earlier
-      // Ensure item has correct shape if record structure varies
-      if (!item) return "";
-      return [
-        `"${item.name ? item.name.replace(/"/g, '""') : ""}"`,
-        item.unit,
-        item.currentStock,
-        item.pendingStock,
-        item.initialStock,
-        item.endStock,
-        item.consumption ? item.consumption.toFixed(2).replace(".", ",") : "0",
-      ].join(";");
+    const currentDate = new Date();
+    const formattedDate = currentDate.toLocaleDateString("es-ES", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
     });
 
-    const csvContent =
-      "data:text/csv;charset=utf-8," + [headers.join(";"), ...rows].join("\n");
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    const dateStr = new Date(record.date)
-      .toLocaleDateString("es-ES")
-      .replace(/\//g, "-");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `inventario_${dateStr}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    // Items para resetear el stock
+    const updatesToReset: { name: string; stock: number }[] = [];
+
+    // Creamos el registro de inventario con el stock actual, sin cálculos de consumo
+    const recordItems: InventoryRecordItem[] = inventoryItems.map((item) => {
+      const totalStock = calculateTotalStock(item);
+      const pendingStock = stockInOrders[item.id] || 0;
+
+      // Prepara la actualización para resetear el stock a 0
+      updatesToReset.push({
+        name: item.name,
+        stock: 0,
+      });
+
+      return {
+        itemId: item.id,
+        name: item.name,
+        unit: item.unit,
+        currentStock: totalStock,
+        pendingStock: pendingStock,
+        initialStock: totalStock,
+        endStock: totalStock,
+        consumption: 0,
+      };
+    });
+
+    const newRecord: InventoryRecord = {
+      id: crypto.randomUUID(),
+      date: currentDate.toISOString(),
+      label: `Inventario (${formattedDate})`, // ETIQUETA: Inventario (Snapshot)
+      items: recordItems,
+    };
+
+    // 1. Guarda la instantánea en el historial
+    onSaveInventoryRecord(newRecord);
+
+    // 2. Resetea el stock de todos los artículos a 0
+    onBulkUpdateInventoryItems(updatesToReset);
+
+    alert(
+      `Instantánea del inventario (${formattedDate}) guardada en el historial y stocks reseteados a 0.`
+    );
+  };
+
+  // ---- HANDLER PARA BORRADO COMPLETO DEL HISTORIAL ----
+  const handleDeleteAllHistory = () => {
+    if (validInventoryHistory.length === 0) {
+      alert("El historial ya está vacío.");
+      return;
+    }
+
+    if (
+      window.confirm(
+        "ADVERTENCIA: ¿Está seguro de que desea eliminar TODO el historial de inventario y análisis de consumo? Esta acción es irreversible."
+      )
+    ) {
+      onDeleteAllInventoryRecords();
+      alert("Historial eliminado correctamente.");
+    }
+  };
+
+  // ---- RENDERIZADO DE DETALLES DEL HISTORIAL ----
+  const closeRecordDetailModal = () => {
+    setViewingRecord(null);
+  };
+
+  const openRecordDetailModal = (record: InventoryRecord) => {
+    setViewingRecord(record);
+  };
+
+  const renderInventoryRecordDetailModal = () => {
+    if (!viewingRecord) return null;
+
+    return (
+      <Modal
+        title={`Detalle: ${viewingRecord.label}`}
+        onClose={closeRecordDetailModal}
+        onSave={closeRecordDetailModal}
+        hideSaveButton={true}
+      >
+        <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2">
+          <p className="text-sm text-slate-400 mb-4">
+            Registrado el{" "}
+            {new Date(viewingRecord.date).toLocaleString("es-ES", {
+              dateStyle: "long",
+              timeStyle: "short",
+            })}
+            .
+          </p>
+          <table className="min-w-full divide-y divide-gray-700">
+            <thead className="bg-gray-700/50">
+              <tr>
+                <th className="px-2 py-3 text-left text-xs font-medium text-gray-300 uppercase">
+                  Artículo
+                </th>
+                <th className="px-2 py-3 text-right text-xs font-medium text-gray-300 uppercase">
+                  Stock Inicial
+                </th>
+                <th className="px-2 py-3 text-right text-xs font-medium text-gray-300 uppercase">
+                  Stock Final
+                </th>
+                <th className="px-2 py-3 text-right text-xs font-medium text-gray-300 uppercase">
+                  Consumo
+                </th>
+                <th className="px-2 py-3 text-left text-xs font-medium text-gray-300 uppercase">
+                  Unidad
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-gray-800 divide-y divide-gray-700">
+              {viewingRecord.items.map((item, itemIndex) => (
+                <tr key={item.itemId || itemIndex}>
+                  <td className="px-2 py-2 whitespace-nowrap text-sm font-medium text-white">
+                    {item.name}
+                  </td>
+                  <td className="px-2 py-2 whitespace-nowrap text-sm text-right text-blue-400">
+                    {item.initialStock.toFixed(1).replace(".", ",")}
+                  </td>
+                  <td className="px-2 py-2 whitespace-nowrap text-sm text-right text-yellow-400">
+                    {item.endStock.toFixed(1).replace(".", ",")}
+                  </td>
+                  <td
+                    className={`px-2 py-2 whitespace-nowrap text-sm text-right font-bold ${
+                      item.consumption >= 0 ? "text-green-400" : "text-red-400"
+                    }`}
+                  >
+                    {item.consumption.toFixed(1).replace(".", ",")}
+                  </td>
+                  <td className="px-2 py-2 whitespace-nowrap text-xs text-gray-400">
+                    {item.unit}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Modal>
+    );
   };
 
   const tabClasses = (
@@ -1056,14 +1130,14 @@ const InventoryComponent: React.FC<InventoryProps> = ({
                 </div>
               )}
               <button
-                onClick={exportCurrentInventoryToCSV}
-                className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2 transition duration-300"
+                onClick={handleSaveInventorySnapshot}
+                className="bg-violet-600 hover:bg-violet-700 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2 transition duration-300"
               >
-                <ExportIcon />
-                <span className="hidden sm:inline">Exportar a Excel</span>
+                <InventoryIcon />{" "}
+                <span className="hidden sm:inline">Guardar Inventario</span>
               </button>
               <button
-                onClick={() => openInventoryModal()}
+                onClick={() => openInventoryModal(undefined)}
                 className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2 transition duration-300"
               >
                 <PlusIcon />{" "}
@@ -1210,12 +1284,10 @@ const InventoryComponent: React.FC<InventoryProps> = ({
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase">
                     Estado
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase">
-                    Monto Total
-                  </th>
                   <th className="px-6 py-3 text-right text-xs font-medium text-gray-300 uppercase">
                     Acciones
-                  </th>
+                  </th>{" "}
+                  {/* MONTO TOTAL ELIMINADO */}
                 </tr>
               </thead>
               <tbody className="bg-gray-800 divide-y divide-gray-700">
@@ -1239,9 +1311,6 @@ const InventoryComponent: React.FC<InventoryProps> = ({
                       >
                         {order.status}
                       </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-green-400">
-                      {order.totalAmount.toFixed(2)}€
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
                       <button
@@ -1371,15 +1440,20 @@ const InventoryComponent: React.FC<InventoryProps> = ({
 
       {activeTab === "history" && (
         <div className="bg-gray-800 shadow-xl rounded-lg p-6">
-          <h2 className="text-2xl font-bold text-white mb-4">
-            Historial de Inventarios Guardados 📊
-          </h2>
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-2xl font-bold text-white">
+              Historial de Inventarios Guardados 📊
+            </h2>
+            <button
+              onClick={handleDeleteAllHistory}
+              className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2 transition duration-300"
+            >
+              <TrashIcon /> Borrar Historial Completo
+            </button>
+          </div>
 
           {/* Componente de análisis semanal */}
-          <WeeklyConsumptionAnalysis
-            inventoryHistory={validInventoryHistory}
-            exportInventoryRecordToCSV={exportInventoryRecordToCSV}
-          />
+          <WeeklyConsumptionAnalysis inventoryHistory={validInventoryHistory} />
 
           <h3 className="text-xl font-bold text-white mb-3 mt-8 border-t border-gray-700 pt-4">
             Registros Anteriores
@@ -1393,9 +1467,8 @@ const InventoryComponent: React.FC<InventoryProps> = ({
                   className="bg-slate-900/50 p-4 rounded-lg flex justify-between items-center hover:bg-slate-700/50 transition-colors"
                 >
                   <div>
-                    <p className="font-semibold text-white">
-                      Análisis de Inventario Guardado
-                    </p>
+                    {/* Utiliza la etiqueta guardada */}
+                    <p className="font-semibold text-white">{record.label}</p>
                     <p className="text-sm text-slate-400">
                       {new Date(record.date).toLocaleString("es-ES", {
                         dateStyle: "long",
@@ -1403,13 +1476,14 @@ const InventoryComponent: React.FC<InventoryProps> = ({
                       })}
                     </p>
                   </div>
-                  <button
-                    onClick={() => exportInventoryRecordToCSV(record)}
-                    className="bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2 transition duration-300"
-                  >
-                    <ExportIcon />
-                    Exportar a CSV
-                  </button>
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => openRecordDetailModal(record)}
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2 transition duration-300"
+                    >
+                      Ver Detalles
+                    </button>
+                  </div>
                 </li>
               ))}
             </ul>
@@ -1446,6 +1520,9 @@ const InventoryComponent: React.FC<InventoryProps> = ({
           {renderOrderForm()}
         </Modal>
       )}
+
+      {/* Modal para mostrar los detalles del historial */}
+      {viewingRecord && renderInventoryRecordDetailModal()}
 
       {isDriveModalOpen && (
         <Modal

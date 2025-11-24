@@ -1624,7 +1624,7 @@ const App: React.FC = () => {
       </main>
 
       <footer className="bg-slate-900 text-center py-6 text-slate-500 text-sm border-t border-slate-800">
-        © 2025 Business Finance Tracker. All rights reserved.
+        © 2025 Inventory App. All rights reserved.
       </footer>
     </div>
   );
