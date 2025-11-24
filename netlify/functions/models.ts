@@ -42,7 +42,6 @@ const InventoryItemSchema = new Schema(
     name: String,
     category: String,
     stockByLocation: { type: Map, of: Number },
-    unit: String,
   },
   { _id: false, timestamps: true }
 );
@@ -90,7 +89,7 @@ const InventoryRecordItemSchema = new Schema(
   {
     itemId: String,
     name: String,
-    unit: String,
+
     currentStock: Number,
     pendingStock: Number,
     initialStock: Number,

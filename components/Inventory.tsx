@@ -41,7 +41,6 @@ interface InventoryProps {
 const emptyInventoryItem: Omit<InventoryItem, "id" | "stockByLocation"> = {
   name: "",
   category: "",
-  unit: "",
 };
 
 const emptyPurchaseOrder: Omit<PurchaseOrder, "id"> = {
@@ -198,9 +197,6 @@ const WeeklyConsumptionAnalysis: React.FC<WeeklyConsumptionAnalysisProps> = ({
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">
                 Cantidad Gastada
               </th>
-              <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">
-                Unidad
-              </th>
             </tr>
           </thead>
           <tbody className="bg-gray-800 divide-y divide-gray-700">
@@ -211,9 +207,6 @@ const WeeklyConsumptionAnalysis: React.FC<WeeklyConsumptionAnalysisProps> = ({
                 </td>
                 <td className="px-4 py-4 whitespace-nowrap text-lg font-bold text-red-400">
                   {item.consumption.toFixed(1).replace(".", ",")}
-                </td>
-                <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-400">
-                  {item.unit}
                 </td>
               </tr>
             ))}
@@ -658,7 +651,7 @@ const InventoryComponent: React.FC<InventoryProps> = ({
       return {
         itemId: item.id,
         name: item.name,
-        unit: item.unit,
+
         // El historial guarda el valor calculado antes de resetear
         currentStock: totalStock,
         pendingStock: pendingStock,
@@ -731,7 +724,6 @@ const InventoryComponent: React.FC<InventoryProps> = ({
       return {
         itemId: item.id,
         name: item.name,
-        unit: item.unit,
         currentStock: totalStock,
         pendingStock: pendingStock,
         initialStock: totalStock,
@@ -828,9 +820,6 @@ const InventoryComponent: React.FC<InventoryProps> = ({
             <th className="px-2 py-3 text-right text-xs font-medium text-gray-300 uppercase">
               Consumo
             </th>
-            <th className="px-2 py-3 text-left text-xs font-medium text-gray-300 uppercase">
-              Unidad
-            </th>
           </tr>
         </thead>
         <tbody className="bg-gray-800 divide-y divide-gray-700">
@@ -859,9 +848,6 @@ const InventoryComponent: React.FC<InventoryProps> = ({
                 {item.consumption !== undefined
                   ? item.consumption.toFixed(1).replace(".", ",")
                   : "-"}
-              </td>
-              <td className="px-2 py-2 whitespace-nowrap text-xs text-gray-400">
-                {item.unit}
               </td>
             </tr>
           ))}
@@ -963,9 +949,7 @@ const InventoryComponent: React.FC<InventoryProps> = ({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <input
           type="text"
-          placeholder="Unidad (kg, l, uds.)"
-          value={currentInventoryItem.unit || ""}
-          onChange={(e) => handleInventoryChange("unit", e.target.value)}
+          onChange={(e) => handleInventoryChange(e.target.value)}
           className="bg-gray-700 text-white rounded p-2 w-full"
         />
       </div>
@@ -1039,9 +1023,7 @@ const InventoryComponent: React.FC<InventoryProps> = ({
                   key={item.id}
                   className="flex justify-between items-center p-2 hover:bg-slate-700/50 rounded-sm"
                 >
-                  <span className="text-white text-sm">
-                    {item.name} ({item.unit})
-                  </span>
+                  <span className="text-white text-sm">{item.name}</span>
                   <button
                     onClick={() => {
                       const newItem: OrderItem = {
@@ -1079,7 +1061,7 @@ const InventoryComponent: React.FC<InventoryProps> = ({
               {orderItem.inventoryItemId && itemDetails ? (
                 // Muestra el nombre y la unidad si el ID está seleccionado
                 <span className="text-white w-1/3 flex-shrink-0">
-                  {itemDetails.name} ({itemDetails.unit})
+                  {itemDetails.name}
                 </span>
               ) : (
                 // Muestra el selector si el ID está vacío (recién añadido manualmente)

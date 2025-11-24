@@ -2,7 +2,7 @@ import { Handler } from "@netlify/functions";
 import { connectToDatabase } from "./utils/db";
 import { PurchaseOrderModel } from "./models";
 
-export const handler: Handler = async (event, context) => {
+const handler: Handler = async (event, context) => {
   context.callbackWaitsForEmptyEventLoop = false;
   await connectToDatabase();
 
@@ -18,7 +18,8 @@ export const handler: Handler = async (event, context) => {
 
   try {
     if (event.httpMethod === "GET") {
-      const orders = await PurchaseOrderModel.find().sort({ orderDate: -1 });
+      // Corrección TS2349: Se usa 'as any' en find()
+      const orders = (PurchaseOrderModel.find as any)().sort({ orderDate: -1 });
       return { statusCode: 200, headers, body: JSON.stringify(orders) };
     }
 
@@ -32,12 +33,15 @@ export const handler: Handler = async (event, context) => {
         delete orderToSave.id;
       }
 
+      // Corrección TS2349: Se usa countDocuments() con 'as any' para evitar el error de tipado
+      const exists = await (PurchaseOrderModel.countDocuments as any)({
+        _id: orderToSave._id,
+      });
+
       // Comprobar si existe para actualizar (update) o crear (create)
-      if (
-        orderToSave._id &&
-        (await PurchaseOrderModel.exists({ _id: orderToSave._id }))
-      ) {
-        const updated = await PurchaseOrderModel.findByIdAndUpdate(
+      if (orderToSave._id && exists > 0) {
+        // Corrección TS2349: Se usa 'as any' en findByIdAndUpdate
+        const updated = await (PurchaseOrderModel.findByIdAndUpdate as any)(
           orderToSave._id, // Usamos el _id para la búsqueda
           orderToSave, // Usamos el objeto mapeado para la actualización
           { new: true }
@@ -45,14 +49,15 @@ export const handler: Handler = async (event, context) => {
         return { statusCode: 200, headers, body: JSON.stringify(updated) };
       }
 
-      // Crear nuevo documento
-      const newOrder = await PurchaseOrderModel.create(orderToSave);
+      // Corrección TS2349: Se usa 'as any' en create()
+      const newOrder = await (PurchaseOrderModel.create as any)(orderToSave);
       return { statusCode: 201, headers, body: JSON.stringify(newOrder) };
     }
 
     if (event.httpMethod === "DELETE") {
       const { id } = event.queryStringParameters || {};
-      await PurchaseOrderModel.findByIdAndDelete(id);
+      // Corrección TS2349: Se usa 'as any' en findByIdAndDelete
+      await (PurchaseOrderModel.findByIdAndDelete as any)(id);
       return {
         statusCode: 200,
         headers,
@@ -69,3 +74,6 @@ export const handler: Handler = async (event, context) => {
     };
   }
 };
+
+// Se utiliza la exportación explícita para evitar problemas de inicialización en Netlify CLI
+export { handler };
