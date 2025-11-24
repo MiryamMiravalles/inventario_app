@@ -24,15 +24,29 @@ export const handler: Handler = async (event, context) => {
 
     if (event.httpMethod === "POST") {
       const data = JSON.parse(event.body || "{}");
-      if (data.id && (await PurchaseOrderModel.exists({ _id: data.id }))) {
+
+      // Mapear 'id' a '_id' y limpiar el objeto para Mongoose
+      const orderToSave: any = { ...data };
+      if (orderToSave.id) {
+        orderToSave._id = orderToSave.id;
+        delete orderToSave.id;
+      }
+
+      // Comprobar si existe para actualizar o crear
+      if (
+        orderToSave._id &&
+        (await PurchaseOrderModel.exists({ _id: orderToSave._id }))
+      ) {
         const updated = await PurchaseOrderModel.findByIdAndUpdate(
-          data.id,
-          data,
+          orderToSave._id, // Usamos el _id para la búsqueda
+          orderToSave, // Usamos el objeto mapeado para la actualización
           { new: true }
         );
         return { statusCode: 200, headers, body: JSON.stringify(updated) };
       }
-      const newOrder = await PurchaseOrderModel.create(data);
+
+      // Crear nuevo documento (asume que orderToSave ya tiene _id si es nuevo, como lo genera el frontend)
+      const newOrder = await PurchaseOrderModel.create(orderToSave);
       return { statusCode: 201, headers, body: JSON.stringify(newOrder) };
     }
 

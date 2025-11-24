@@ -480,7 +480,7 @@ const InventoryComponent: React.FC<InventoryProps> = ({
     closeOrderModal();
   };
 
-  // NUEVA FUNCIÓN: Recibir Pedido y Actualizar Stock
+  // NUEVA FUNCIÓN: Recibir Pedido y Actualizar Stock (SOLO ACTUALIZA ESTADO)
   const handleReceiveOrder = (order: PurchaseOrder) => {
     if (order.status === PurchaseOrderStatus.Completed) {
       alert("Este pedido ya fue recibido.");
@@ -489,32 +489,13 @@ const InventoryComponent: React.FC<InventoryProps> = ({
 
     if (
       !window.confirm(
-        `¿Confirmar la recepción del pedido a ${order.supplierName} (${order.orderDate})? Esto sumará los artículos al stock de Almacén.`
+        `¿Confirmar la recepción del pedido a ${order.supplierName} (${order.orderDate})? Esto actualizará el estado del pedido a 'Completed' y lo eliminará de la columna "En Pedidos".`
       )
     ) {
       return;
     }
 
-    // 1. Prepara la actualización del stock (sumar)
-    const updatesForInventory: { name: string; stock: number }[] = order.items
-      .map((orderItem) => {
-        const itemDetails = inventoryItems.find(
-          (item) => item.id === orderItem.inventoryItemId
-        );
-        if (!itemDetails || orderItem.quantity <= 0) return null;
-
-        // Usamos la cantidad del pedido como el valor a sumar al stock
-        return {
-          name: itemDetails.name,
-          stock: orderItem.quantity,
-        };
-      })
-      .filter((u): u is { name: string; stock: number } => u !== null);
-
-    // 2. Actualiza el stock (modo "add")
-    if (updatesForInventory.length > 0) {
-      onBulkUpdateInventoryItems(updatesForInventory, "add"); // <<< SUMA AL STOCK DE ALMACÉN
-    }
+    // Se omite la preparación y llamada a onBulkUpdateInventoryItems.
 
     // 3. Actualiza el estado del pedido a Completado
     onSavePurchaseOrder({
@@ -524,7 +505,7 @@ const InventoryComponent: React.FC<InventoryProps> = ({
     });
 
     alert(
-      `Pedido de ${order.supplierName} recibido y stock actualizado en Almacén.`
+      `Pedido de ${order.supplierName} marcado como recibido y eliminado de "En Pedidos". Recuerda ajustar el stock manualmente en la pestaña de Inventario si es necesario.`
     );
   };
 
@@ -618,7 +599,7 @@ const InventoryComponent: React.FC<InventoryProps> = ({
     const pending: { [key: string]: number } = {};
     // MODIFICADO: Solo se consideran pedidos PENDIENTES para la columna "En Pedidos"
     purchaseOrders
-      .filter((o) => o.status === PurchaseOrderStatus.Pending)
+      .filter((o) => o.status === PurchaseOrderStatus.Pending) // FILTRO CLAVE
       .forEach((o) => {
         o.items.forEach((item) => {
           pending[item.inventoryItemId] =
@@ -626,7 +607,7 @@ const InventoryComponent: React.FC<InventoryProps> = ({
         });
       });
     return pending;
-  }, [purchaseOrders]);
+  }, [purchaseOrders]); // Depende de que 'purchaseOrders' se actualice
 
   const handleEndStockChange = (itemId: string, value: string) => {
     // Allow only digits and a single comma followed by at most one digit
