@@ -545,7 +545,7 @@ const InventoryComponent: React.FC<InventoryProps> = ({
       costAtTimeOfPurchase: 0,
     };
     setCurrentPurchaseOrder((prev) => ({
-      ...prev.items,
+      ...prev, // CORREGIDO: Desestructuración del objeto 'prev' completo
       items: [...prev.items, newItem],
     }));
   };
@@ -732,7 +732,6 @@ const InventoryComponent: React.FC<InventoryProps> = ({
       const pendingStock = stockInOrders[item.id] || 0;
 
       // Prepara la actualización para resetear el stock a 0
-      // Nota: solo reseteamos el stock del almacén (ubicación principal) si está siendo usado
       updatesToReset.push({
         name: item.name,
         stock: 0,
@@ -773,21 +772,15 @@ const InventoryComponent: React.FC<InventoryProps> = ({
     );
   };
 
-  // ---- HANDLER PARA BORRADO COMPLETO DEL HISTORIAL ----
+  // ---- HANDLER PARA BORRADO COMPLETO DEL HISTORIAL (Delegado a App.tsx) ----
   const handleDeleteAllHistory = () => {
     if (validInventoryHistory.length === 0) {
       alert("El historial ya está vacío.");
       return;
     }
-
-    if (
-      window.confirm(
-        "ADVERTENCIA: ¿Está seguro de que desea eliminar TODO el historial de inventario y análisis de consumo? Esta acción es irreversible."
-      )
-    ) {
-      onDeleteAllInventoryRecords();
-      alert("Historial eliminado correctamente.");
-    }
+    // Llama a la función asíncrona pasada desde App.tsx
+    onDeleteAllInventoryRecords();
+    // La confirmación y la actualización del estado se hacen en App.tsx
   };
 
   // ---- RENDERIZADO DE DETALLES DEL HISTORIAL (FIX de Issue 2) ----

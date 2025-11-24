@@ -1,64 +1,88 @@
-// miryammiravalles/inventario_app/inventario_app-f32ca598e5e73825ca90ae4c3afa331e1cbfdfd2/netlify/functions/history.ts
+const API_BASE = "/api"; // Mapped in netlify.toml to /.netlify/functions
 
-import { Handler } from "@netlify/functions";
-import { connectToDatabase } from "./utils/db";
-import { InventoryRecordModel } from "./models";
+const headers = {
+  "Content-Type": "application/json",
+};
 
-export const handler: Handler = async (event, context) => {
-  context.callbackWaitsForEmptyEventLoop = false;
-  await connectToDatabase();
-
-  const headers = {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Headers": "Content-Type",
-    "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
-  };
-
-  if (event.httpMethod === "OPTIONS") {
-    return { statusCode: 200, headers, body: "" };
+const handleResponse = async (res: Response) => {
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ error: "Unknown error" }));
+    throw new Error(error.error || `Request failed with status ${res.status}`);
   }
+  return res.json();
+};
 
-  try {
-    if (event.httpMethod === "GET") {
-      const history = await InventoryRecordModel.find().sort({ date: -1 });
-      return { statusCode: 200, headers, body: JSON.stringify(history) };
-    }
-
-    if (event.httpMethod === "POST") {
-      const data = JSON.parse(event.body || "{}");
-      const newRecord = await InventoryRecordModel.create(data);
-      return { statusCode: 201, headers, body: JSON.stringify(newRecord) };
-    }
-
-    // [MODIFICACIÓN] Manejador para DELETE (Borrado completo)
-    if (event.httpMethod === "DELETE") {
-      const { id } = event.queryStringParameters || {};
-
-      // Si no se proporciona un ID, borrar todos los registros.
-      if (!id) {
-        await InventoryRecordModel.deleteMany({});
-        return {
-          statusCode: 200,
-          headers,
-          body: JSON.stringify({ message: "All history records deleted" }),
-        };
-      }
-
-      // Si se proporciona un ID, borrar un registro específico. (Mantenido por si se añade la funcionalidad de borrado individual)
-      await InventoryRecordModel.findByIdAndDelete(id);
-      return {
-        statusCode: 200,
+export const api = {
+  sessions: {
+    list: () => fetch(`${API_BASE}/sessions`).then(handleResponse),
+    save: (data: any) =>
+      fetch(`${API_BASE}/sessions`, {
+        method: "POST",
         headers,
-        body: JSON.stringify({ message: "Record deleted" }),
-      };
-    }
-
-    return { statusCode: 405, headers, body: "Method Not Allowed" };
-  } catch (error: any) {
-    return {
-      statusCode: 500,
-      headers,
-      body: JSON.stringify({ error: error.message }),
-    };
-  }
+        body: JSON.stringify(data),
+      }).then(handleResponse),
+    delete: (id: string) =>
+      fetch(`${API_BASE}/sessions?id=${id}`, { method: "DELETE" }).then(
+        handleResponse
+      ),
+  },
+  inventory: {
+    list: () => fetch(`${API_BASE}/inventory`).then(handleResponse),
+    save: (data: any) =>
+      fetch(`${API_BASE}/inventory`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(data),
+      }).then(handleResponse),
+    delete: (id: string) =>
+      fetch(`${API_BASE}/inventory?id=${id}`, { method: "DELETE" }).then(
+        handleResponse
+      ),
+    bulkCreate: (data: any[]) =>
+      fetch(`${API_BASE}/inventory`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(data),
+      }).then(handleResponse),
+    bulkUpdate: (updates: any[]) =>
+      fetch(`${API_BASE}/inventory`, {
+        method: "PUT",
+        headers,
+        body: JSON.stringify(updates),
+      }).then(handleResponse),
+  },
+  orders: {
+    list: () => fetch(`${API_BASE}/orders`).then(handleResponse),
+    save: (data: any) =>
+      fetch(`${API_BASE}/orders`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(data),
+      }).then(handleResponse),
+    delete: (id: string) =>
+      fetch(`${API_BASE}/orders?id=${id}`, { method: "DELETE" }).then(
+        handleResponse
+      ),
+  },
+  history: {
+    list: () => fetch(`${API_BASE}/history`).then(handleResponse),
+    save: (data: any) =>
+      fetch(`${API_BASE}/history`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(data),
+      }).then(handleResponse),
+    // [MODIFICACIÓN] Nuevo método para borrar todo el historial
+    deleteAll: () =>
+      fetch(`${API_BASE}/history`, { method: "DELETE" }).then(handleResponse),
+  },
+  config: {
+    getIncomeSources: () => fetch(`${API_BASE}/config`).then(handleResponse),
+    saveIncomeSources: (sources: any[]) =>
+      fetch(`${API_BASE}/config`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(sources),
+      }).then(handleResponse),
+  },
 };

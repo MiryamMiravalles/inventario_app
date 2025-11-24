@@ -14,6 +14,11 @@ import InventoryComponent from "./components/Inventory";
 import { MenuIcon, XIcon, RefreshIcon } from "./components/icons";
 import { INVENTORY_LOCATIONS } from "./constants";
 
+// IMPORTANTE: Asegúrate de que este import sea correcto en tu entorno.
+// Si tu archivo 'src/api/index.ts' está en la misma carpeta que 'App.tsx',
+// el path debería ser `./src/api`.
+import { api } from "./src/api";
+
 // Mock Data
 const initialSessions: CashFlowSession[] = [];
 
@@ -1382,8 +1387,9 @@ const initialInventoryItems: InventoryItem[] = [
 
 const initialPurchaseOrders: PurchaseOrder[] = [];
 
+// --- COMPONENTE PRINCIPAL ---
 const App: React.FC = () => {
-  const [activeView, setActiveView] = useState<View>("inventory"); // MODIFICADO: de "cashflow" a "inventory"
+  const [activeView, setActiveView] = useState<View>("inventory");
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   const [sessions, setSessions] = useState<CashFlowSession[]>(initialSessions);
@@ -1418,6 +1424,7 @@ const App: React.FC = () => {
     }
   });
 
+  // --- EFECTOS DE PERSISTENCIA (LocalStorage) ---
   useEffect(() => {
     try {
       localStorage.setItem(
@@ -1437,6 +1444,7 @@ const App: React.FC = () => {
     }
   }, [incomeSources]);
 
+  // --- CÁLCULOS Y HELPERS ---
   const navItems: { id: View; label: string }[] = [
     { id: "inventory", label: "Inventario" },
     { id: "cashflow", label: "Caja" },
@@ -1478,6 +1486,67 @@ const App: React.FC = () => {
     []
   );
 
+  // --- API Handlers para Pedidos ---
+  const handleSavePurchaseOrder = useCallback(
+    async (order: PurchaseOrder) => {
+      try {
+        // Guarda/Actualiza a través de la API
+        const savedOrder = await api.orders.save(order);
+        addOrUpdate(setPurchaseOrders, savedOrder as PurchaseOrder);
+      } catch (e) {
+        console.error("Error saving order:", e);
+        alert(
+          `Error al guardar el pedido: ${
+            e instanceof Error ? e.message : "Error desconocido"
+          }`
+        );
+      }
+    },
+    [addOrUpdate]
+  );
+
+  const handleDeletePurchaseOrder = useCallback(
+    async (id: string) => {
+      try {
+        // Elimina a través de la API
+        await api.orders.delete(id);
+        deleteItem(setPurchaseOrders, id);
+      } catch (e) {
+        console.error("Error deleting order:", e);
+        alert(
+          `Error al eliminar el pedido: ${
+            e instanceof Error ? e.message : "Error desconocido"
+          }`
+        );
+      }
+    },
+    [deleteItem]
+  );
+
+  // --- CORRECCIÓN: API Handler para Borrar Todo el Historial ---
+  const handleDeleteAllHistoryRecords = useCallback(async () => {
+    try {
+      if (
+        !window.confirm(
+          "ADVERTENCIA: ¿Está seguro de que desea eliminar TODO el historial de inventario y análisis de consumo? Esta acción es irreversible."
+        )
+      ) {
+        return;
+      }
+      // Llama a la API para borrar en el servidor
+      await api.history.deleteAll();
+      setInventoryHistory([]); // Limpia el estado local al tener éxito
+      alert("Historial eliminado correctamente.");
+    } catch (e) {
+      console.error("Error deleting all history:", e);
+      alert(
+        `Error al eliminar todo el historial: ${
+          e instanceof Error ? e.message : "Error desconocido"
+        }`
+      );
+    }
+  }, []);
+
   const handleSaveInventoryRecord = useCallback(
     (record: InventoryRecord) => {
       addOrUpdate(setInventoryHistory, record);
@@ -1486,7 +1555,7 @@ const App: React.FC = () => {
   );
 
   const handleBulkUpdateInventoryItems = useCallback(
-    (updates: { name: string; stock: number }[]) => {
+    (updates: { name: string; stock: number }[], mode: "set" | "add") => {
       const updateMap = new Map(
         updates.map((u) => [u.name.toLowerCase(), u.stock])
       );
@@ -1497,10 +1566,21 @@ const App: React.FC = () => {
 
       setInventoryItems((prevItems) => {
         return prevItems.map((item) => {
-          const newStock = updateMap.get(item.name.toLowerCase());
-          if (newStock !== undefined) {
-            // Puts all synced stock into 'Almacén' and zeroes out other locations.
-            const newStockByLocation = { ...zeroedStock, Almacén: newStock };
+          const newStockValue = updateMap.get(item.name.toLowerCase());
+          if (newStockValue !== undefined) {
+            const currentStockInAlmacen = item.stockByLocation["Almacén"] || 0;
+
+            let finalStock;
+            if (mode === "set") {
+              // Modo 'set': establece el stock final observado (endStock)
+              finalStock = newStockValue;
+            } else {
+              // Modo 'add': suma la cantidad (usado para recibir pedidos)
+              finalStock = currentStockInAlmacen + newStockValue;
+            }
+
+            // Pone el stock final en 'Almacén' y mantiene el resto a 0
+            const newStockByLocation = { ...zeroedStock, Almacén: finalStock };
             return { ...item, stockByLocation: newStockByLocation };
           }
           return item;
@@ -1530,13 +1610,12 @@ const App: React.FC = () => {
             suppliers={uniqueSuppliers}
             onSaveInventoryItem={(item) => addOrUpdate(setInventoryItems, item)}
             onDeleteInventoryItem={(id) => deleteItem(setInventoryItems, id)}
-            onSavePurchaseOrder={(order) =>
-              addOrUpdate(setPurchaseOrders, order)
-            }
-            onDeletePurchaseOrder={(id) => deleteItem(setPurchaseOrders, id)}
+            onSavePurchaseOrder={handleSavePurchaseOrder}
+            onDeletePurchaseOrder={handleDeletePurchaseOrder}
             onBulkUpdateInventoryItems={handleBulkUpdateInventoryItems}
             inventoryHistory={inventoryHistory}
             onSaveInventoryRecord={handleSaveInventoryRecord}
+            onDeleteAllInventoryRecords={handleDeleteAllHistoryRecords}
           />
         );
       default:

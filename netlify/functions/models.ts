@@ -17,6 +17,7 @@ SessionSchema.set("toJSON", {
   virtuals: true,
   versionKey: false,
   transform: function (doc, ret) {
+    ret.id = ret._id.toString();
     delete ret._id;
   },
 });
@@ -29,31 +30,36 @@ IncomeSourceSchema.set("toJSON", {
   virtuals: true,
   versionKey: false,
   transform: (doc, ret) => {
-    ret.id = ret._id;
+    ret.id = ret._id.toString();
     delete ret._id;
   },
 });
 
 const InventoryItemSchema = new Schema(
   {
+    // CORRECCIÓN: Permite IDs generados por el cliente (UUIDs)
+    _id: { type: String, required: true },
     name: String,
     category: String,
     stockByLocation: { type: Map, of: Number },
     unit: String,
   },
-  { timestamps: true }
+  { _id: false, timestamps: true }
 );
 
 InventoryItemSchema.set("toJSON", {
   virtuals: true,
   versionKey: false,
   transform: function (doc, ret) {
+    ret.id = ret._id; // _id ya es string aquí
     delete ret._id;
   },
 });
 
 const PurchaseOrderSchema = new Schema(
   {
+    // CORRECCIÓN: Permite IDs generados por el cliente (UUIDs)
+    _id: { type: String, required: true },
     orderDate: String,
     deliveryDate: String,
     supplierName: String,
@@ -67,13 +73,14 @@ const PurchaseOrderSchema = new Schema(
       },
     ],
   },
-  { timestamps: true }
+  { _id: false, timestamps: true }
 );
 
 PurchaseOrderSchema.set("toJSON", {
   virtuals: true,
   versionKey: false,
   transform: function (doc, ret) {
+    ret.id = ret._id; // _id ya es string aquí
     delete ret._id;
   },
 });
@@ -97,18 +104,21 @@ const InventoryRecordItemSchema = new Schema(
 // Esquema completo para InventoryRecord
 const InventoryRecordSchema = new Schema(
   {
+    // CORRECCIÓN: Permite IDs generados por el cliente (UUIDs)
+    _id: { type: String, required: true },
     date: String,
     label: String, // Etiqueta (Ej: "Análisis de consumo (DD/MM/YYYY)")
     type: String, // Tipo de registro ("snapshot" o "analysis")
     items: [InventoryRecordItemSchema],
   },
-  { timestamps: true }
+  { _id: false, timestamps: true }
 );
 
 InventoryRecordSchema.set("toJSON", {
   virtuals: true,
   versionKey: false,
   transform: function (doc, ret) {
+    ret.id = ret._id; // _id ya es string aquí
     delete ret._id;
   },
 });
