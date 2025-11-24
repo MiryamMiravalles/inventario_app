@@ -5,6 +5,7 @@ import {
   SupplierExpense,
   InventoryItem,
   PurchaseOrder,
+  PurchaseOrderStatus,
   InventoryRecord,
   IncomeSource,
 } from "./types";
@@ -12,7 +13,6 @@ import CashFlow from "./components/CashFlow";
 import InventoryComponent from "./components/Inventory";
 import { MenuIcon, XIcon, RefreshIcon } from "./components/icons";
 import { INVENTORY_LOCATIONS } from "./constants";
-import { api } from "./src/api/index";
 
 // Mock Data
 const initialSessions: CashFlowSession[] = [];
@@ -1383,7 +1383,7 @@ const initialInventoryItems: InventoryItem[] = [
 const initialPurchaseOrders: PurchaseOrder[] = [];
 
 const App: React.FC = () => {
-  const [activeView, setActiveView] = useState<View>("inventory");
+  const [activeView, setActiveView] = useState<View>("inventory"); // MODIFICADO: de "cashflow" a "inventory"
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   const [sessions, setSessions] = useState<CashFlowSession[]>(initialSessions);
@@ -1398,7 +1398,15 @@ const App: React.FC = () => {
     initialPurchaseOrders
   );
   const [inventoryHistory, setInventoryHistory] = useState<InventoryRecord[]>(
-    [] // Inicialmente vacío, se carga con loadData
+    () => {
+      try {
+        const saved = localStorage.getItem("inventoryHistory");
+        return saved ? JSON.parse(saved) : [];
+      } catch (e) {
+        console.error("Failed to load inventory history from localStorage", e);
+        return [];
+      }
+    }
   );
 
   const [incomeSources, setIncomeSources] = useState<IncomeSource[]>(() => {
@@ -1410,32 +1418,6 @@ const App: React.FC = () => {
     }
   });
 
-  // Función para cargar datos iniciales (Historial de la API)
-  const loadData = useCallback(async () => {
-    try {
-      // Cargar historial de inventario
-      const history = await api.history.list();
-      setInventoryHistory(history);
-    } catch (error) {
-      console.error("Error loading initial data from API:", error);
-      // Fallback a localStorage si la API falla o está deshabilitada
-      try {
-        const saved = localStorage.getItem("inventoryHistory");
-        setInventoryHistory(saved ? JSON.parse(saved) : []);
-      } catch (e) {
-        console.error("Failed to load inventory history from localStorage", e);
-        setInventoryHistory([]);
-      }
-    }
-  }, []);
-
-  // Efecto para cargar datos al montar el componente
-  useEffect(() => {
-    loadData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Efecto para guardar en localStorage (manteniendo el fallback)
   useEffect(() => {
     try {
       localStorage.setItem(
@@ -1496,44 +1478,29 @@ const App: React.FC = () => {
     []
   );
 
-  const handleSaveInventoryRecord = useCallback((record: InventoryRecord) => {
-    // Usar la API para guardar el nuevo registro
-    api.history
-      .save(record)
-      .then((newRecord) => {
-        setInventoryHistory((prev) =>
-          [newRecord, ...prev].sort(
-            (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-          )
-        );
-      })
-      .catch((e) => console.error("Error saving inventory record:", e));
-  }, []);
+  const handleSaveInventoryRecord = useCallback(
+    (record: InventoryRecord) => {
+      addOrUpdate(setInventoryHistory, record);
+    },
+    [addOrUpdate]
+  );
 
   const handleBulkUpdateInventoryItems = useCallback(
-    (updates: { name: string; stock: number }[], mode: "set" | "add") => {
+    (updates: { name: string; stock: number }[]) => {
       const updateMap = new Map(
         updates.map((u) => [u.name.toLowerCase(), u.stock])
+      );
+      const zeroedStock = INVENTORY_LOCATIONS.reduce(
+        (acc, loc) => ({ ...acc, [loc]: 0 }),
+        {}
       );
 
       setInventoryItems((prevItems) => {
         return prevItems.map((item) => {
           const newStock = updateMap.get(item.name.toLowerCase());
           if (newStock !== undefined) {
-            let updatedStock: number;
-
-            if (mode === "set") {
-              updatedStock = newStock;
-            } else {
-              const currentWarehouseStock =
-                item.stockByLocation["Almacén"] || 0;
-              updatedStock = currentWarehouseStock + newStock;
-            }
-
-            const newStockByLocation = {
-              ...item.stockByLocation,
-              Almacén: updatedStock,
-            };
+            // Puts all synced stock into 'Almacén' and zeroes out other locations.
+            const newStockByLocation = { ...zeroedStock, Almacén: newStock };
             return { ...item, stockByLocation: newStockByLocation };
           }
           return item;
@@ -1542,29 +1509,6 @@ const App: React.FC = () => {
     },
     []
   );
-
-  // [NUEVA FUNCIÓN] Implementación del borrado completo del historial
-  const handleDeleteAllInventoryRecords = useCallback(async () => {
-    // Usamos window.confirm en lugar de un modal personalizado para mayor simplicidad
-    if (
-      !window.confirm(
-        "ADVERTENCIA: ¿Está seguro de que desea eliminar TODO el historial de inventario y análisis? Esta acción es irreversible."
-      )
-    ) {
-      return;
-    }
-
-    try {
-      await api.history.deleteAll(); // Llamada a la API de borrado
-      setInventoryHistory([]); // Resetear el estado local
-      alert("Historial de inventario borrado exitosamente.");
-    } catch (error) {
-      console.error("Error deleting all inventory history:", error);
-      alert(
-        "Error al intentar eliminar el historial. Revisa la consola para más detalles."
-      );
-    }
-  }, []);
 
   const renderContent = () => {
     switch (activeView) {
@@ -1593,7 +1537,6 @@ const App: React.FC = () => {
             onBulkUpdateInventoryItems={handleBulkUpdateInventoryItems}
             inventoryHistory={inventoryHistory}
             onSaveInventoryRecord={handleSaveInventoryRecord}
-            onDeleteAllInventoryRecords={handleDeleteAllInventoryRecords} // [IMPORTANTE] Pasar la función
           />
         );
       default:
@@ -1681,7 +1624,7 @@ const App: React.FC = () => {
       </main>
 
       <footer className="bg-slate-900 text-center py-6 text-slate-500 text-sm border-t border-slate-800">
-        © 2025 Inventory App. All rights reserved.
+        © 2025 Business Finance Tracker. All rights reserved.
       </footer>
     </div>
   );
