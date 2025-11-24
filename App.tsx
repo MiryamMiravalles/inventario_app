@@ -1383,7 +1383,7 @@ const initialInventoryItems: InventoryItem[] = [
 const initialPurchaseOrders: PurchaseOrder[] = [];
 
 const App: React.FC = () => {
-  const [activeView, setActiveView] = useState<View>("cashflow");
+  const [activeView, setActiveView] = useState<View>("inventory");
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   const [sessions, setSessions] = useState<CashFlowSession[]>(initialSessions);
@@ -1438,8 +1438,8 @@ const App: React.FC = () => {
   }, [incomeSources]);
 
   const navItems: { id: View; label: string }[] = [
-    { id: "cashflow", label: "Caja" },
     { id: "inventory", label: "Inventario" },
+    { id: "cashflow", label: "Caja" },
   ];
 
   const uniqueSuppliers = useMemo(() => {
@@ -1564,8 +1564,8 @@ const App: React.FC = () => {
       <nav className="bg-slate-900/80 backdrop-blur-sm shadow-lg sticky top-0 z-10 border-b border-slate-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
-            <div className="flex-shrink-0 text-violet-400 font-bold text-xl">
-              CONTROL DE STOCK Y CAJAS
+            <div className="flex-shrink-0 text-violet-400 font-bold text-2xl">
+              Control de Stock y Cajas
             </div>
 
             <div className="hidden md:block">
@@ -1580,15 +1580,6 @@ const App: React.FC = () => {
                   </button>
                 ))}
               </div>
-            </div>
-
-            <div className="hidden md:flex items-center">
-              <button
-                onClick={() => window.location.reload()}
-                className="p-2 rounded-full text-slate-400 hover:text-white hover:bg-slate-700 transition-colors"
-              >
-                <RefreshIcon />
-              </button>
             </div>
 
             <div className="-mr-2 flex md:hidden">
