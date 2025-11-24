@@ -1,88 +1,73 @@
-const API_BASE = "/api"; // Mapped in netlify.toml to /.netlify/functions
+// netlify/functions/history.ts
+import { Handler } from "@netlify/functions";
+import { connectToDatabase } from "./utils/db";
+import { InventoryRecordModel } from "./models";
 
-const headers = {
-  "Content-Type": "application/json",
-};
+// ÚNICA DECLARACIÓN Y EXPORTACIÓN DEL HANDLER
+export const handler: Handler = async (event, context) => {
+  context.callbackWaitsForEmptyEventLoop = false;
+  await connectToDatabase();
 
-const handleResponse = async (res: Response) => {
-  if (!res.ok) {
-    const error = await res.json().catch(() => ({ error: "Unknown error" }));
-    throw new Error(error.error || `Request failed with status ${res.status}`);
+  const headers = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
+  };
+
+  if (event.httpMethod === "OPTIONS") {
+    return { statusCode: 200, headers, body: "" };
   }
-  return res.json();
-};
 
-export const api = {
-  sessions: {
-    list: () => fetch(`${API_BASE}/sessions`).then(handleResponse),
-    save: (data: any) =>
-      fetch(`${API_BASE}/sessions`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(data),
-      }).then(handleResponse),
-    delete: (id: string) =>
-      fetch(`${API_BASE}/sessions?id=${id}`, { method: "DELETE" }).then(
-        handleResponse
-      ),
-  },
-  inventory: {
-    list: () => fetch(`${API_BASE}/inventory`).then(handleResponse),
-    save: (data: any) =>
-      fetch(`${API_BASE}/inventory`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(data),
-      }).then(handleResponse),
-    delete: (id: string) =>
-      fetch(`${API_BASE}/inventory?id=${id}`, { method: "DELETE" }).then(
-        handleResponse
-      ),
-    bulkCreate: (data: any[]) =>
-      fetch(`${API_BASE}/inventory`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(data),
-      }).then(handleResponse),
-    bulkUpdate: (updates: any[]) =>
-      fetch(`${API_BASE}/inventory`, {
-        method: "PUT",
-        headers,
-        body: JSON.stringify(updates),
-      }).then(handleResponse),
-  },
-  orders: {
-    list: () => fetch(`${API_BASE}/orders`).then(handleResponse),
-    save: (data: any) =>
-      fetch(`${API_BASE}/orders`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(data),
-      }).then(handleResponse),
-    delete: (id: string) =>
-      fetch(`${API_BASE}/orders?id=${id}`, { method: "DELETE" }).then(
-        handleResponse
-      ),
-  },
-  history: {
-    list: () => fetch(`${API_BASE}/history`).then(handleResponse),
-    save: (data: any) =>
-      fetch(`${API_BASE}/history`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(data),
-      }).then(handleResponse),
-    // [MODIFICACIÓN] Nuevo método para borrar todo el historial
-    deleteAll: () =>
-      fetch(`${API_BASE}/history`, { method: "DELETE" }).then(handleResponse),
-  },
-  config: {
-    getIncomeSources: () => fetch(`${API_BASE}/config`).then(handleResponse),
-    saveIncomeSources: (sources: any[]) =>
-      fetch(`${API_BASE}/config`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(sources),
-      }).then(handleResponse),
-  },
+  try {
+    if (event.httpMethod === "GET") {
+      const records = await InventoryRecordModel.find().sort({ date: -1 });
+      return { statusCode: 200, headers, body: JSON.stringify(records) };
+    }
+
+    if (event.httpMethod === "POST") {
+      const data = JSON.parse(event.body || "{}");
+      const recordToSave: any = { ...data };
+      if (recordToSave.id) {
+        recordToSave._id = recordToSave.id;
+        delete recordToSave.id;
+      }
+      // Se usa 'as any' para mitigar errores de tipado de Mongoose (TS2349)
+      const newRecord = await (InventoryRecordModel.create as any)(
+        recordToSave
+      );
+      return { statusCode: 201, headers, body: JSON.stringify(newRecord) };
+    }
+
+    // Lógica para Borrado Total
+    if (event.httpMethod === "DELETE") {
+      const { id } = event.queryStringParameters || {};
+
+      if (id) {
+        // Borrar un solo registro
+        await (InventoryRecordModel.findByIdAndDelete as any)(id);
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({ message: "Deleted single record" }),
+        };
+      } else {
+        // Borrar TODOS los registros
+        await InventoryRecordModel.deleteMany({});
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({ message: "All history records deleted" }),
+        };
+      }
+    }
+
+    return { statusCode: 405, headers, body: "Method Not Allowed" };
+  } catch (error: any) {
+    return {
+      statusCode: 500,
+      headers,
+      body: JSON.stringify({ error: error.message }),
+    };
+  }
 };
+// NOTA: La línea 'export { handler };' ha sido ELIMINADA para resolver el conflicto de exportación.

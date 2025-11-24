@@ -946,13 +946,6 @@ const InventoryComponent: React.FC<InventoryProps> = ({
         onChange={(e) => handleInventoryChange("category", e.target.value)}
         className="bg-gray-700 text-white rounded p-2 w-full"
       />
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <input
-          type="text"
-          onChange={(e) => handleInventoryChange(e.target.value)}
-          className="bg-gray-700 text-white rounded p-2 w-full"
-        />
-      </div>
     </div>
   );
 

@@ -1,3 +1,4 @@
+// netlify/functions/orders.ts
 import { Handler } from "@netlify/functions";
 import { connectToDatabase } from "./utils/db";
 import { PurchaseOrderModel } from "./models";
@@ -19,7 +20,9 @@ const handler: Handler = async (event, context) => {
   try {
     if (event.httpMethod === "GET") {
       // Corrección TS2349: Se usa 'as any' en find()
-      const orders = (PurchaseOrderModel.find as any)().sort({ orderDate: -1 });
+      const orders = await (PurchaseOrderModel.find as any)().sort({
+        orderDate: -1,
+      });
       return { statusCode: 200, headers, body: JSON.stringify(orders) };
     }
 
