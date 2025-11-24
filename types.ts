@@ -74,6 +74,7 @@ export enum PurchaseOrderStatus {
   Pending = "Pending",
   Completed = "Completed",
   Cancelled = "Cancelled",
+  Archived = "Archived",
 }
 
 export interface InventoryItem {
@@ -81,7 +82,6 @@ export interface InventoryItem {
   name: string;
   category: string;
   stockByLocation: { [key: string]: number };
-  unit: string; // e.g., 'kg', 'liters', 'units'
 }
 
 export interface OrderItem {
@@ -104,7 +104,6 @@ export interface PurchaseOrder {
 export interface InventoryRecordItem {
   itemId: string;
   name: string;
-  unit: string;
   currentStock: number;
   pendingStock: number;
   initialStock: number;

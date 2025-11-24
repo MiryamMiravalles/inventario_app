@@ -1,9 +1,9 @@
-// miryammiravalles/inventario_app/inventario_app-f32ca598e5e73825ca90ae4c3afa331e1cbfdfd2/netlify/functions/history.ts
-
+// netlify/functions/history.ts
 import { Handler } from "@netlify/functions";
 import { connectToDatabase } from "./utils/db";
 import { InventoryRecordModel } from "./models";
 
+// ÚNICA DECLARACIÓN Y EXPORTACIÓN DEL HANDLER
 export const handler: Handler = async (event, context) => {
   context.callbackWaitsForEmptyEventLoop = false;
   await connectToDatabase();
@@ -20,22 +20,38 @@ export const handler: Handler = async (event, context) => {
 
   try {
     if (event.httpMethod === "GET") {
-      const history = await InventoryRecordModel.find().sort({ date: -1 });
-      return { statusCode: 200, headers, body: JSON.stringify(history) };
+      const records = await InventoryRecordModel.find().sort({ date: -1 });
+      return { statusCode: 200, headers, body: JSON.stringify(records) };
     }
 
     if (event.httpMethod === "POST") {
       const data = JSON.parse(event.body || "{}");
-      const newRecord = await InventoryRecordModel.create(data);
+      const recordToSave: any = { ...data };
+      if (recordToSave.id) {
+        recordToSave._id = recordToSave.id;
+        delete recordToSave.id;
+      }
+      // Se usa 'as any' para mitigar errores de tipado de Mongoose (TS2349)
+      const newRecord = await (InventoryRecordModel.create as any)(
+        recordToSave
+      );
       return { statusCode: 201, headers, body: JSON.stringify(newRecord) };
     }
 
-    // [MODIFICACIÓN] Manejador para DELETE (Borrado completo)
+    // Lógica para Borrado Total
     if (event.httpMethod === "DELETE") {
       const { id } = event.queryStringParameters || {};
 
-      // Si no se proporciona un ID, borrar todos los registros.
-      if (!id) {
+      if (id) {
+        // Borrar un solo registro
+        await (InventoryRecordModel.findByIdAndDelete as any)(id);
+        return {
+          statusCode: 200,
+          headers,
+          body: JSON.stringify({ message: "Deleted single record" }),
+        };
+      } else {
+        // Borrar TODOS los registros
         await InventoryRecordModel.deleteMany({});
         return {
           statusCode: 200,
@@ -43,14 +59,6 @@ export const handler: Handler = async (event, context) => {
           body: JSON.stringify({ message: "All history records deleted" }),
         };
       }
-
-      // Si se proporciona un ID, borrar un registro específico. (Mantenido por si se añade la funcionalidad de borrado individual)
-      await InventoryRecordModel.findByIdAndDelete(id);
-      return {
-        statusCode: 200,
-        headers,
-        body: JSON.stringify({ message: "Record deleted" }),
-      };
     }
 
     return { statusCode: 405, headers, body: "Method Not Allowed" };
@@ -62,3 +70,4 @@ export const handler: Handler = async (event, context) => {
     };
   }
 };
+// NOTA: La línea 'export { handler };' ha sido ELIMINADA para resolver el conflicto de exportación.
