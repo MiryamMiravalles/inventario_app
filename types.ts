@@ -100,6 +100,7 @@ export interface PurchaseOrder {
   totalAmount: number;
 }
 
+// MODIFICADO PARA SOPORTAR DESGLOSE POR UBICACIÓN
 export interface InventoryRecordItem {
   itemId: string;
   name: string;
@@ -109,11 +110,14 @@ export interface InventoryRecordItem {
   initialStock: number;
   endStock: number;
   consumption: number;
+  stockByLocationSnapshot?: { [key: string]: number }; // NUEVO: para guardar el detalle del Snapshot
 }
 
+// MODIFICADO PARA DIFERENCIAR EL TIPO DE REGISTRO
 export interface InventoryRecord {
   id: string;
   date: string;
   label: string; // <<-- CORRECCIÓN AÑADIDA
   items: InventoryRecordItem[];
+  type?: "snapshot" | "analysis"; // NUEVO: para diferenciar el tipo de registro
 }
