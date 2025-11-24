@@ -72,6 +72,9 @@ export const api = {
         headers,
         body: JSON.stringify(data),
       }).then(handleResponse),
+    // [MODIFICACIÓN] Nuevo método para borrar todo el historial
+    deleteAll: () =>
+      fetch(`${API_BASE}/history`, { method: "DELETE" }).then(handleResponse),
   },
   config: {
     getIncomeSources: () => fetch(`${API_BASE}/config`).then(handleResponse),
