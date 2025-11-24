@@ -74,6 +74,7 @@ export enum PurchaseOrderStatus {
   Pending = "Pending",
   Completed = "Completed",
   Cancelled = "Cancelled",
+  Archived = "Archived",
 }
 
 export interface InventoryItem {

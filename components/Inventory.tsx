@@ -480,32 +480,35 @@ const InventoryComponent: React.FC<InventoryProps> = ({
     closeOrderModal();
   };
 
-  // NUEVA FUNCIÓN: Recibir Pedido y Actualizar Stock (SOLO ACTUALIZA ESTADO)
+  // NUEVA FUNCIÓN: Recibir Pedido y Actualizar Estado (SIN AFECTAR INVENTARIO)
   const handleReceiveOrder = (order: PurchaseOrder) => {
-    if (order.status === PurchaseOrderStatus.Completed) {
+    // Asegurarse de que no se pueda recibir si ya está completado o archivado
+    if (
+      order.status === PurchaseOrderStatus.Completed ||
+      order.status === PurchaseOrderStatus.Archived
+    ) {
       alert("Este pedido ya fue recibido.");
       return;
     }
 
     if (
       !window.confirm(
-        `¿Confirmar la recepción del pedido a ${order.supplierName} (${order.orderDate})? Esto actualizará el estado del pedido a 'Completed' y lo eliminará de la columna "En Pedidos".`
+        `¿Confirmar la recepción del pedido a ${order.supplierName} (${order.orderDate})? Esto actualizará el estado a 'Completed' y las cantidades AHORA se reflejarán en la columna \"En Pedidos\" del Análisis.`
       )
     ) {
       return;
     }
 
-    // Se omite la preparación y llamada a onBulkUpdateInventoryItems.
-
-    // 3. Actualiza el estado del pedido a Completado
+    // 1. Actualiza el estado del pedido a Completado
+    // Esto lo hace visible en la columna "En Pedidos" debido a la nueva lógica de filtrado.
     onSavePurchaseOrder({
       ...order,
       status: PurchaseOrderStatus.Completed,
       deliveryDate: new Date().toISOString().split("T")[0],
-    });
+    } as PurchaseOrder);
 
     alert(
-      `Pedido de ${order.supplierName} marcado como recibido y eliminado de "En Pedidos". Recuerda ajustar el stock manualmente en la pestaña de Inventario si es necesario.`
+      `Pedido de ${order.supplierName} marcado como recibido y completado. Las cantidades AHORA se reflejan en la columna \"En Pedidos\" de la pestaña Análisis. No se realizó ajuste automático al stock.`
     );
   };
 
@@ -597,9 +600,9 @@ const InventoryComponent: React.FC<InventoryProps> = ({
   // ---- Analysis Handlers ----
   const stockInOrders = useMemo(() => {
     const pending: { [key: string]: number } = {};
-    // MODIFICADO: Solo se consideran pedidos PENDIENTES para la columna "En Pedidos"
+    // CAMBIO CLAVE: Ahora el filtro es por COMPLETED
     purchaseOrders
-      .filter((o) => o.status === PurchaseOrderStatus.Pending) // FILTRO CLAVE
+      .filter((o) => o.status === PurchaseOrderStatus.Completed)
       .forEach((o) => {
         o.items.forEach((item) => {
           pending[item.inventoryItemId] =
@@ -607,7 +610,7 @@ const InventoryComponent: React.FC<InventoryProps> = ({
         });
       });
     return pending;
-  }, [purchaseOrders]); // Depende de que 'purchaseOrders' se actualice
+  }, [purchaseOrders]);
 
   const handleEndStockChange = (itemId: string, value: string) => {
     // Allow only digits and a single comma followed by at most one digit
@@ -643,9 +646,12 @@ const InventoryComponent: React.FC<InventoryProps> = ({
         endOfWeekStock[item.id] !== undefined &&
         endOfWeekStock[item.id].length > 0
       ) {
+        // La nueva existencia en Inventario (newLiveStock) se calcula para el historial, pero no se aplica aquí.
+        const newLiveStock = endStock + pendingStock;
+
         updatesForInventory.push({
           name: item.name,
-          stock: endStock, // El stock final observado (endStock) se convierte en el nuevo stock de Almacén
+          stock: 0, // <<-- CAMBIO: Forzar el stock activo a 0
         });
       }
 
@@ -653,6 +659,7 @@ const InventoryComponent: React.FC<InventoryProps> = ({
         itemId: item.id,
         name: item.name,
         unit: item.unit,
+        // El historial guarda el valor calculado antes de resetear
         currentStock: totalStock,
         pendingStock: pendingStock,
         initialStock: initialTotalStock,
@@ -661,9 +668,9 @@ const InventoryComponent: React.FC<InventoryProps> = ({
       };
     });
 
-    // 2. Guarda el nuevo estado del inventario (actualiza el stock real)
+    // 2. Guarda el nuevo estado del inventario (resetea el stock real a 0)
     if (updatesForInventory.length > 0) {
-      onBulkUpdateInventoryItems(updatesForInventory, "set"); // Modo "set" para establecer el stock
+      onBulkUpdateInventoryItems(updatesForInventory, "set"); // Establece Stock Actual a 0
     }
 
     // 3. Guarda el Análisis en el Historial con la etiqueta específica
@@ -682,11 +689,22 @@ const InventoryComponent: React.FC<InventoryProps> = ({
     };
 
     onSaveInventoryRecord(newRecord);
+
+    // NUEVO PASO: Archivar los pedidos que fueron contados en este análisis. (Resetea "En Pedidos")
+    purchaseOrders
+      .filter((o) => o.status === PurchaseOrderStatus.Completed)
+      .forEach((order) => {
+        onSavePurchaseOrder({
+          ...order,
+          status: PurchaseOrderStatus.Archived,
+        } as PurchaseOrder);
+      });
+
     alert(
-      `Análisis de consumo (${formattedDate}) guardado y el stock actualizado correctamente.`
+      `Análisis de consumo (${formattedDate}) guardado. El Stock Actual ha sido actualizado al valor de (Stock Fin de Semana + En Pedidos).`
     );
 
-    // 4. Resetear los valores de entrada para la próxima semana
+    // 4. Resetear los valores de entrada para la próxima semana (Resetea "Stock Fin de Semana")
     setEndOfWeekStock({});
   };
 
@@ -704,19 +722,10 @@ const InventoryComponent: React.FC<InventoryProps> = ({
       year: "numeric",
     });
 
-    // Items para resetear el stock
-    const updatesToReset: { name: string; stock: number }[] = [];
-
     // 1. CREAMOS EL REGISTRO (con el stock actual)
     const recordItems: InventoryRecordItem[] = inventoryItems.map((item) => {
       const totalStock = calculateTotalStock(item);
       const pendingStock = stockInOrders[item.id] || 0;
-
-      // Prepara la actualización para resetear el stock a 0
-      updatesToReset.push({
-        name: item.name,
-        stock: 0,
-      });
 
       // Capturamos el estado actual por ubicación
       return {
@@ -735,21 +744,45 @@ const InventoryComponent: React.FC<InventoryProps> = ({
     const newRecord: InventoryRecord = {
       id: crypto.randomUUID(),
       date: currentDate.toISOString(),
-      label: `Inventario (${formattedDate})`, // ETIQUETA: Inventario (Snapshot)
+      label: `Inventario (${formattedDate})`,
       items: recordItems,
-      type: "snapshot", // Añadido para diferenciar
+      type: "snapshot",
     };
 
     // 2. Guarda la instantánea en el historial
     onSaveInventoryRecord(newRecord);
 
-    // 3. Resetea el stock del Almacén de todos los artículos a 0
+    alert(
+      `Instantánea del inventario (${formattedDate}) guardada en el historial. El Stock Actual NO ha sido modificado.`
+    );
+  };
+
+  // --- NUEVA FUNCIÓN: Resetear a 0 el stock físico ---
+  const handleResetInventory = () => {
+    if (
+      !window.confirm(
+        "ADVERTENCIA: Esta acción pondrá TODO el stock actual del inventario a 0. ¿Desea continuar?"
+      )
+    ) {
+      return;
+    }
+
+    const updatesToReset: { name: string; stock: number }[] = [];
+
+    // Prepara la actualización para resetear el stock a 0 en la ubicación principal (Almacén)
+    inventoryItems.forEach((item) => {
+      updatesToReset.push({
+        name: item.name,
+        stock: 0,
+      });
+    });
+
     if (updatesToReset.length > 0) {
       onBulkUpdateInventoryItems(updatesToReset, "set");
     }
 
     alert(
-      `Instantánea del inventario (${formattedDate}) guardada en el historial y stocks reseteados a 0.`
+      "Stock actual reseteado a 0 en la pestaña Inventario. Puede comenzar el nuevo conteo físico."
     );
   };
 
@@ -1225,6 +1258,14 @@ const InventoryComponent: React.FC<InventoryProps> = ({
                 <InventoryIcon />{" "}
                 <span className="hidden sm:inline">Guardar Inventario</span>
               </button>
+              {/* NUEVO BOTÓN PARA RESETEAR STOCK A 0 */}
+              <button
+                onClick={handleResetInventory}
+                className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2 transition duration-300"
+              >
+                <TrashIcon />
+                <span className="hidden sm:inline">Resetear Stock</span>
+              </button>
               <button
                 onClick={() => openInventoryModal(undefined)}
                 className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2 transition duration-300"
@@ -1461,7 +1502,7 @@ const InventoryComponent: React.FC<InventoryProps> = ({
                 onClick={handleSaveCurrentInventory}
                 className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2 transition duration-300"
               >
-                Guardar Análisis en Historial
+                Guardar Análisis de Consumo
               </button>
             </div>
           </div>
