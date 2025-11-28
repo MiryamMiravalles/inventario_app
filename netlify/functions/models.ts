@@ -16,7 +16,8 @@ const SessionSchema = new Schema(
 SessionSchema.set("toJSON", {
   virtuals: true,
   versionKey: false,
-  transform: function (doc, ret) {
+  // CORRECCIÓN: Tipar ret como 'any' para permitir la adición de 'id'
+  transform: function (doc, ret: any) {
     ret.id = ret._id.toString();
     delete ret._id;
   },
@@ -29,7 +30,8 @@ const IncomeSourceSchema = new Schema({
 IncomeSourceSchema.set("toJSON", {
   virtuals: true,
   versionKey: false,
-  transform: (doc, ret) => {
+  // CORRECCIÓN: Tipar ret como 'any'
+  transform: (doc, ret: any) => {
     ret.id = ret._id.toString();
     delete ret._id;
   },
@@ -49,7 +51,8 @@ const InventoryItemSchema = new Schema(
 InventoryItemSchema.set("toJSON", {
   virtuals: true,
   versionKey: false,
-  transform: function (doc, ret) {
+  // CORRECCIÓN: Tipar ret como 'any'
+  transform: function (doc, ret: any) {
     ret.id = ret._id; // _id ya es string aquí
     delete ret._id;
   },
@@ -78,7 +81,8 @@ const PurchaseOrderSchema = new Schema(
 PurchaseOrderSchema.set("toJSON", {
   virtuals: true,
   versionKey: false,
-  transform: function (doc, ret) {
+  // CORRECCIÓN: Tipar ret como 'any'
+  transform: function (doc, ret: any) {
     ret.id = ret._id; // _id ya es string aquí
     delete ret._id;
   },
@@ -116,7 +120,8 @@ const InventoryRecordSchema = new Schema(
 InventoryRecordSchema.set("toJSON", {
   virtuals: true,
   versionKey: false,
-  transform: function (doc, ret) {
+  // CORRECCIÓN: Tipar ret como 'any'
+  transform: function (doc, ret: any) {
     ret.id = ret._id; // _id ya es string aquí
     delete ret._id;
   },

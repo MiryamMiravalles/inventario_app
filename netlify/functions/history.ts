@@ -3,10 +3,24 @@ import { Handler } from "@netlify/functions";
 import { connectToDatabase } from "./utils/db";
 import { InventoryRecordModel } from "./models";
 
-// ÚNICA DECLARACIÓN Y EXPORTACIÓN DEL HANDLER
-export const handler: Handler = async (event, context) => {
+const handler: Handler = async (event, context) => {
   context.callbackWaitsForEmptyEventLoop = false;
-  await connectToDatabase();
+
+  try {
+    await connectToDatabase();
+    console.log("Database connection established for history function.");
+  } catch (dbError) {
+    console.error("Database Connection Error (history):", dbError);
+    return {
+      statusCode: 500,
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Headers": "Content-Type",
+        "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
+      },
+      body: JSON.stringify({ error: "Failed to connect to database." }),
+    };
+  }
 
   const headers = {
     "Access-Control-Allow-Origin": "*",
@@ -20,25 +34,28 @@ export const handler: Handler = async (event, context) => {
 
   try {
     if (event.httpMethod === "GET") {
-      const records = await InventoryRecordModel.find().sort({ date: -1 });
+      const records = await (InventoryRecordModel.find as any)().sort({
+        date: -1,
+      });
       return { statusCode: 200, headers, body: JSON.stringify(records) };
     }
 
     if (event.httpMethod === "POST") {
       const data = JSON.parse(event.body || "{}");
-      const recordToSave: any = { ...data };
+      const recordToSave: any = { ...data }; // 💡 GUARDA HORA UTC DEL SERVIDOR
+
+      recordToSave.date = new Date();
+
       if (recordToSave.id) {
         recordToSave._id = recordToSave.id;
         delete recordToSave.id;
       }
-      // Se usa 'as any' para mitigar errores de tipado de Mongoose (TS2349)
       const newRecord = await (InventoryRecordModel.create as any)(
         recordToSave
       );
       return { statusCode: 201, headers, body: JSON.stringify(newRecord) };
     }
 
-    // Lógica para Borrado Total
     if (event.httpMethod === "DELETE") {
       const { id } = event.queryStringParameters || {};
 
@@ -51,8 +68,8 @@ export const handler: Handler = async (event, context) => {
           body: JSON.stringify({ message: "Deleted single record" }),
         };
       } else {
-        // Borrar TODOS los registros
-        await InventoryRecordModel.deleteMany({});
+        // Borrar TODOS los registros (Reseteo)
+        const result = await (InventoryRecordModel.deleteMany as any)({});
         return {
           statusCode: 200,
           headers,
@@ -63,6 +80,7 @@ export const handler: Handler = async (event, context) => {
 
     return { statusCode: 405, headers, body: "Method Not Allowed" };
   } catch (error: any) {
+    console.error("Error executing history function:", error);
     return {
       statusCode: 500,
       headers,
@@ -70,4 +88,5 @@ export const handler: Handler = async (event, context) => {
     };
   }
 };
-// NOTA: La línea 'export { handler };' ha sido ELIMINADA para resolver el conflicto de exportación.
+
+export { handler };

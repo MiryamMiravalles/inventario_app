@@ -1198,7 +1198,23 @@ const initialInventoryItems: InventoryItem[] = [
 ];
 
 const initialPurchaseOrders: PurchaseOrder[] = [];
+// --- UTILITY PARA LA HORA LOCAL ---
+/**
+ * CORRECCIÓN DE HORA: Convierte la fecha UTC (guardada en el backend) a la hora local.
+ */
+const formatUTCToLocal = (utcDateString: string | Date | undefined): string => {
+  if (!utcDateString) return "N/A";
 
+  // El backend guarda la fecha como string UTC.
+  return new Date(utcDateString).toLocaleString("es-ES", {
+    year: "numeric",
+    month: "numeric",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false, // Formato 24 horas
+  });
+};
 // --- COMPONENTE PRINCIPAL ---
 const App: React.FC = () => {
   const [activeView, setActiveView] = useState<View>("inventory");
