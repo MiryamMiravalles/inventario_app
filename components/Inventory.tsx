@@ -812,18 +812,23 @@ const InventoryComponent: React.FC<InventoryProps> = ({
 
     const renderSnapshotTable = () => (
       <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-700">
+        {/* Usamos table-fixed y w-full para forzar el ajuste al ancho del modal. */}
+        <table className="divide-y divide-gray-700 w-full table-fixed">
           <thead className="bg-gray-700/50">
             <tr>
-              <th className="px-2 py-3 text-left text-xs font-medium text-gray-300 uppercase sticky left-0 bg-gray-700/50 z-10">
+              {/* Forzamos ancho para Articulo */}
+              <th className="px-2 py-3 text-left text-xs font-medium text-gray-300 uppercase w-[150px]">
                 Artículo
               </th>
               {INVENTORY_LOCATIONS.map((loc) => (
                 <th
                   key={loc}
-                  className="px-2 py-3 text-right text-xs font-medium text-gray-300 uppercase"
+                  // Forzamos un ancho para que todas las columnas quepan
+                  className="px-2 py-3 text-right text-xs font-medium text-gray-300 uppercase w-[70px] whitespace-nowrap overflow-hidden text-ellipsis"
+                  style={{ minWidth: "70px", maxWidth: "70px" }}
                 >
-                  {loc.replace("Office Rest", "Office R")}
+                  {/* Truncar el nombre de la ubicación si es demasiado largo */}
+                  {loc.length > 8 ? loc.substring(0, 6) + "..." : loc}
                 </th>
               ))}
             </tr>
@@ -834,13 +839,14 @@ const InventoryComponent: React.FC<InventoryProps> = ({
                 key={item.itemId || itemIndex}
                 className="hover:bg-gray-700/50"
               >
-                <td className="px-2 py-2 whitespace-nowrap text-sm font-medium text-white sticky left-0 bg-gray-800 z-10">
+                {/* Forzamos ancho para el nombre del artículo */}
+                <td className="px-2 py-2 whitespace-nowrap text-sm font-medium text-white w-[150px]">
                   {item.name}
                 </td>
                 {INVENTORY_LOCATIONS.map((loc) => (
                   <td
                     key={loc}
-                    className="px-2 py-2 whitespace-nowrap text-sm text-right text-white"
+                    className="px-2 py-2 whitespace-nowrap text-sm text-right text-white w-[70px] overflow-hidden text-ellipsis"
                   >
                     {item.stockByLocationSnapshot?.[loc] !== undefined
                       ? item.stockByLocationSnapshot[loc]
@@ -862,15 +868,16 @@ const InventoryComponent: React.FC<InventoryProps> = ({
         onClose={closeRecordDetailModal}
         onSave={closeRecordDetailModal}
         hideSaveButton={true}
+        // 💥 CORRECCIÓN FINAL: Usamos el máximo ancho permitido (7xl) para el modal
+        size="max-w-7xl"
       >
         <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2">
           <p className="text-sm text-slate-400 mb-4">
             Registrado el {/* USANDO formatUTCToLocal */}
             {formatUTCToLocal(viewingRecord.date)}.
           </p>
-          <div className="overflow-x-auto">
-            {isAnalysis ? renderAnalysisTable() : renderSnapshotTable()}
-          </div>
+          {/* El div superior de la tabla ahora tiene el scroll horizontal, pero gracias al max-w-7xl debería verse casi siempre completo. */}
+          {isAnalysis ? renderAnalysisTable() : renderSnapshotTable()}
         </div>
       </Modal>
     );
@@ -1136,8 +1143,7 @@ const InventoryComponent: React.FC<InventoryProps> = ({
             </div>
 
             <div className="flex justify-end items-center gap-2 flex-wrap w-full md:w-auto">
-              {/* BOTÓN RESET STOCK ELIMINADO DE INVENTARIO */}
-              {/* Se mantiene la lógica de reseteo en el análisis de consumo */}
+              {/* BOTÓN RESET STOCK ELIMINADO */}
 
               {/* --- Drive Integration UI --- */}
               {!connectedFile ? (
@@ -1303,7 +1309,7 @@ const InventoryComponent: React.FC<InventoryProps> = ({
               onClick={() => openOrderModal()}
               className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2 transition duration-300 ml-auto"
             >
-              <PlusIcon />{" "}
+              PlusIcon / Nuevo Pedido
               <span className="hidden sm:inline">Nuevo Pedido</span>
             </button>
           </div>
@@ -1370,7 +1376,7 @@ const InventoryComponent: React.FC<InventoryProps> = ({
                         }
                         className="text-red-500"
                       >
-                        <TrashIcon />
+                        TrashIcon
                       </button>
                     </td>
                   </tr>
@@ -1492,7 +1498,7 @@ const InventoryComponent: React.FC<InventoryProps> = ({
               onClick={handleDeleteAllHistory}
               className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2 transition duration-300"
             >
-              <TrashIcon /> Borrar Historial Completo
+              Borrar Historial Completo
             </button>
           </div>
 

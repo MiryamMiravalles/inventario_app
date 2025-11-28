@@ -7,6 +7,8 @@ interface ModalProps {
   onClose: () => void;
   onSave: () => void;
   hideSaveButton?: boolean;
+  // NUEVA PROP: Permite definir el ancho máximo
+  size?: string;
 }
 
 const Modal: React.FC<ModalProps> = ({
@@ -15,6 +17,8 @@ const Modal: React.FC<ModalProps> = ({
   onClose,
   onSave,
   hideSaveButton = false,
+  // Usamos max-w-2xl como valor por defecto si no se pasa 'size'
+  size = "max-w-2xl",
 }) => {
   return (
     <div
@@ -22,7 +26,8 @@ const Modal: React.FC<ModalProps> = ({
       onClick={onClose}
     >
       <div
-        className="bg-gray-800 rounded-lg shadow-2xl w-full max-w-2xl transform transition-all duration-300 scale-95 hover:scale-100"
+        // APLICAMOS LA PROP 'size' AQUÍ:
+        className={`bg-gray-800 rounded-lg shadow-2xl w-full ${size} transform transition-all duration-300 scale-95 hover:scale-100`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex justify-between items-center p-4 border-b border-gray-700">
