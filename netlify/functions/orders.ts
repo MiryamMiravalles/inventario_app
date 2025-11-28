@@ -5,7 +5,23 @@ import { PurchaseOrderModel } from "./models";
 
 const handler: Handler = async (event, context) => {
   context.callbackWaitsForEmptyEventLoop = false;
-  await connectToDatabase();
+
+  // 1. Conexión a la base de datos (con manejo de errores de conexión)
+  try {
+    await connectToDatabase();
+    console.log("Database connection established for orders function.");
+  } catch (dbError) {
+    console.error("Database Connection Error (orders):", dbError);
+    return {
+      statusCode: 500,
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Headers": "Content-Type",
+        "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
+      },
+      body: JSON.stringify({ error: "Failed to connect to database." }),
+    };
+  }
 
   const headers = {
     "Access-Control-Allow-Origin": "*",
@@ -19,7 +35,7 @@ const handler: Handler = async (event, context) => {
 
   try {
     if (event.httpMethod === "GET") {
-      // Corrección TS2349: Se usa 'as any' en find()
+      // CORRECCIÓN TS2349: Tipado explícito a 'any'
       const orders = await (PurchaseOrderModel.find as any)().sort({
         orderDate: -1,
       });
@@ -28,38 +44,46 @@ const handler: Handler = async (event, context) => {
 
     if (event.httpMethod === "POST") {
       const data = JSON.parse(event.body || "{}");
+      console.log("Processing POST request for order:", data.id || "new");
 
-      // Mapear 'id' del frontend a '_id' de Mongoose (necesario si se usa un string ID)
       const orderToSave: any = { ...data };
-      if (orderToSave.id) {
-        orderToSave._id = orderToSave.id;
-        delete orderToSave.id;
+
+      // 1. Mapear 'id' del frontend a '_id' de Mongoose.
+      if (!orderToSave.id) {
+        console.error("Missing order ID in POST request.");
+        return {
+          statusCode: 400,
+          headers,
+          body: JSON.stringify({
+            error: "Order ID (id) is missing in the request.",
+          }),
+        };
       }
 
-      // Corrección TS2349: Se usa countDocuments() con 'as any' para evitar el error de tipado
-      const exists = await (PurchaseOrderModel.countDocuments as any)({
-        _id: orderToSave._id,
+      orderToSave._id = orderToSave.id;
+      delete orderToSave.id;
+
+      // 2. Usar findOneAndUpdate con upsert: true para manejar la creación/actualización.
+      // CORRECCIÓN TS2349: Tipado explícito a 'any'
+      const updatedOrNewOrder = await (
+        PurchaseOrderModel.findOneAndUpdate as any
+      )({ _id: orderToSave._id }, orderToSave, {
+        new: true,
+        upsert: true,
+        runValidators: true,
       });
 
-      // Comprobar si existe para actualizar (update) o crear (create)
-      if (orderToSave._id && exists > 0) {
-        // Corrección TS2349: Se usa 'as any' en findByIdAndUpdate
-        const updated = await (PurchaseOrderModel.findByIdAndUpdate as any)(
-          orderToSave._id, // Usamos el _id para la búsqueda
-          orderToSave, // Usamos el objeto mapeado para la actualización
-          { new: true }
-        );
-        return { statusCode: 200, headers, body: JSON.stringify(updated) };
-      }
-
-      // Corrección TS2349: Se usa 'as any' en create()
-      const newOrder = await (PurchaseOrderModel.create as any)(orderToSave);
-      return { statusCode: 201, headers, body: JSON.stringify(newOrder) };
+      console.log(`Order processed successfully: ${updatedOrNewOrder._id}`);
+      return {
+        statusCode: 201,
+        headers,
+        body: JSON.stringify(updatedOrNewOrder),
+      };
     }
 
     if (event.httpMethod === "DELETE") {
       const { id } = event.queryStringParameters || {};
-      // Corrección TS2349: Se usa 'as any' en findByIdAndDelete
+      // CORRECCIÓN TS2349: Tipado explícito a 'any'
       await (PurchaseOrderModel.findByIdAndDelete as any)(id);
       return {
         statusCode: 200,
@@ -70,10 +94,11 @@ const handler: Handler = async (event, context) => {
 
     return { statusCode: 405, headers, body: "Method Not Allowed" };
   } catch (error: any) {
+    console.error("Error executing orders function:", error);
     return {
       statusCode: 500,
       headers,
-      body: JSON.stringify({ error: error.message }),
+      body: JSON.stringify({ error: error.message || "Internal Server Error" }),
     };
   }
 };
