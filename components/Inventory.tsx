@@ -605,7 +605,8 @@ const InventoryComponent: React.FC<InventoryProps> = ({
       return;
     }
 
-    const updatesForInventory: { name: string; stock: number }[] = [];
+    // Paso 1: Preparar los datos del registro y la lista de reseteo
+    const updatesForReset: { name: string; stock: number }[] = [];
 
     const recordItems: InventoryRecordItem[] = inventoryItems.map((item) => {
       const totalStock = calculateTotalStock(item);
@@ -614,16 +615,11 @@ const InventoryComponent: React.FC<InventoryProps> = ({
       const endStock = parseDecimal(endOfWeekStock[item.id] || "0");
       const consumption = initialTotalStock - endStock;
 
-      if (
-        endOfWeekStock[item.id] !== undefined &&
-        endOfWeekStock[item.id].length > 0
-      ) {
-        // Lógica para resetear el stock a 0 después de guardar el análisis
-        updatesForInventory.push({
-          name: item.name,
-          stock: 0, // Forzar el stock activo a 0
-        });
-      }
+      // Se prepara el reseteo a 0 para todos los items
+      updatesForReset.push({
+        name: item.name,
+        stock: 0, // Forzar el stock activo a 0
+      });
 
       return {
         itemId: item.id,
@@ -636,11 +632,12 @@ const InventoryComponent: React.FC<InventoryProps> = ({
       };
     });
 
-    // 💥 CORRECCIÓN: Llamar a onBulkUpdateInventoryItems para forzar el reseteo
-    if (updatesForInventory.length > 0) {
-      onBulkUpdateInventoryItems(updatesForInventory, "set"); // Establece Stock Actual a 0
+    // Paso 2: Ejecutar el reseteo a 0 (Esto debe ejecutarse SIEMPRE)
+    if (updatesForReset.length > 0) {
+      onBulkUpdateInventoryItems(updatesForReset, "set");
     }
 
+    // Paso 3: Guardar el Análisis en el Historial
     const formattedDate = new Date(analysisDate).toLocaleDateString("es-ES", {
       day: "2-digit",
       month: "2-digit",
@@ -649,7 +646,7 @@ const InventoryComponent: React.FC<InventoryProps> = ({
 
     const newRecord: InventoryRecord = {
       id: crypto.randomUUID(),
-      // 💥 CORRECCIÓN HORA: Usar new Date().toISOString() para la hora actual
+      // Usar new Date().toISOString() para la hora actual
       date: new Date().toISOString(),
       label: `Análisis de consumo (${formattedDate})`,
       items: recordItems,
@@ -658,6 +655,7 @@ const InventoryComponent: React.FC<InventoryProps> = ({
 
     onSaveInventoryRecord(newRecord);
 
+    // Paso 4: Archivar pedidos completados
     purchaseOrders
       .filter((o) => o.status === PurchaseOrderStatus.Completed)
       .forEach((order) => {
@@ -668,9 +666,10 @@ const InventoryComponent: React.FC<InventoryProps> = ({
       });
 
     alert(
-      `Análisis de consumo (${formattedDate}) guardado. El stock físico actual de los artículos contados ha sido reseteado a 0. Las cantidades contadas (Stock Fin de Semana) se han guardado en el historial de análisis.`
+      `Análisis de consumo (${formattedDate}) guardado. El stock físico actual ha sido reseteado a 0. Las cantidades contadas se han guardado en el historial de análisis.`
     );
 
+    // Paso 5: Resetear los valores de entrada para la próxima semana
     setEndOfWeekStock({});
   };
 
@@ -719,7 +718,7 @@ const InventoryComponent: React.FC<InventoryProps> = ({
     );
   };
 
-  // --- FUNCIÓN DE RESETEO A 0 (Ahora se llama a la prop de App.tsx) ---
+  // --- FUNCIÓN DE RESETEO A 0 (Ya no se usa localmente) ---
   const handleResetInventory = handleResetInventoryStocks;
 
   // ---- HANDLER PARA BORRADO COMPLETO DEL HISTORIAL (Delegado a App.tsx) ----
@@ -745,56 +744,71 @@ const InventoryComponent: React.FC<InventoryProps> = ({
 
     const isAnalysis = viewingRecord.type === "analysis";
 
-    const renderAnalysisTable = () => (
-      <table className="min-w-full divide-y divide-gray-700">
-        <thead className="bg-gray-700/50">
-          <tr>
-            <th className="px-2 py-3 text-left text-xs font-medium text-gray-300 uppercase">
-              Artículo
-            </th>
-            <th className="px-2 py-3 text-right text-xs font-medium text-gray-300 uppercase">
-              Stock Inicial
-            </th>
-            <th className="px-2 py-3 text-right text-xs font-medium text-gray-300 uppercase">
-              Stock Final
-            </th>
-            <th className="px-2 py-3 text-right text-xs font-medium text-gray-300 uppercase">
-              Consumo
-            </th>
-          </tr>
-        </thead>
-        <tbody className="bg-gray-800 divide-y divide-gray-700">
-          {viewingRecord.items.map((item, itemIndex) => (
-            <tr key={item.itemId || itemIndex}>
-              <td className="px-2 py-2 whitespace-nowrap text-sm font-medium text-white">
-                {item.name}
-              </td>
-              <td className="px-2 py-2 whitespace-nowrap text-sm text-right text-blue-400">
-                {item.initialStock !== undefined
-                  ? item.initialStock.toFixed(1).replace(".", ",")
-                  : "-"}
-              </td>
-              <td className="px-2 py-2 whitespace-nowrap text-sm text-right text-yellow-400">
-                {item.endStock !== undefined
-                  ? item.endStock.toFixed(1).replace(".", ",")
-                  : "-"}
-              </td>
-              <td
-                className={`px-2 py-2 whitespace-nowrap text-sm text-right font-bold ${
-                  item.consumption !== undefined && item.consumption >= 0
-                    ? "text-green-400"
-                    : "text-red-400"
-                }`}
-              >
-                {item.consumption !== undefined
-                  ? item.consumption.toFixed(1).replace(".", ",")
-                  : "-"}
-              </td>
+    const renderAnalysisTable = () => {
+      // Filtrar solo por consumo > 0.001
+      const consumedItems = viewingRecord.items.filter(
+        (item) => item.consumption > 0.001
+      );
+
+      if (consumedItems.length === 0) {
+        return (
+          <div className="text-center py-5 text-slate-500">
+            <p>No se registró consumo de artículos en este análisis.</p>
+          </div>
+        );
+      }
+
+      return (
+        <table className="min-w-full divide-y divide-gray-700">
+          <thead className="bg-gray-700/50">
+            <tr>
+              <th className="px-2 py-3 text-left text-xs font-medium text-gray-300 uppercase">
+                Artículo
+              </th>
+              <th className="px-2 py-3 text-right text-xs font-medium text-gray-300 uppercase">
+                Stock Inicial
+              </th>
+              <th className="px-2 py-3 text-right text-xs font-medium text-gray-300 uppercase">
+                Stock Final
+              </th>
+              <th className="px-2 py-3 text-right text-xs font-medium text-gray-300 uppercase">
+                Consumo
+              </th>
             </tr>
-          ))}
-        </tbody>
-      </table>
-    );
+          </thead>
+          <tbody className="bg-gray-800 divide-y divide-gray-700">
+            {consumedItems.map((item, itemIndex) => (
+              <tr key={item.itemId || itemIndex}>
+                <td className="px-2 py-2 whitespace-nowrap text-sm font-medium text-white">
+                  {item.name}
+                </td>
+                <td className="px-2 py-2 whitespace-nowrap text-sm text-right text-blue-400">
+                  {item.initialStock !== undefined
+                    ? item.initialStock.toFixed(1).replace(".", ",")
+                    : "-"}
+                </td>
+                <td className="px-2 py-2 whitespace-nowrap text-sm text-right text-yellow-400">
+                  {item.endStock !== undefined
+                    ? item.endStock.toFixed(1).replace(".", ",")
+                    : "-"}
+                </td>
+                <td
+                  className={`px-2 py-2 whitespace-nowrap text-sm text-right font-bold ${
+                    item.consumption !== undefined && item.consumption >= 0
+                      ? "text-green-400"
+                      : "text-red-400"
+                  }`}
+                >
+                  {item.consumption !== undefined
+                    ? item.consumption.toFixed(1).replace(".", ",")
+                    : "-"}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      );
+    };
 
     const renderSnapshotTable = () => (
       <div className="overflow-x-auto">
@@ -1122,14 +1136,8 @@ const InventoryComponent: React.FC<InventoryProps> = ({
             </div>
 
             <div className="flex justify-end items-center gap-2 flex-wrap w-full md:w-auto">
-              {/* BOTÓN RESET STOCK EN INVENTARIO */}
-              <button
-                onClick={handleResetInventory}
-                className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2 transition duration-300"
-              >
-                <TrashIcon />
-                <span className="hidden sm:inline">Reset Stock a Cero</span>
-              </button>
+              {/* BOTÓN RESET STOCK ELIMINADO DE INVENTARIO */}
+              {/* Se mantiene la lógica de reseteo en el análisis de consumo */}
 
               {/* --- Drive Integration UI --- */}
               {!connectedFile ? (
