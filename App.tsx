@@ -11,19 +11,15 @@ import {
 } from "./types";
 import CashFlow from "./components/CashFlow";
 import InventoryComponent from "./components/Inventory";
-import { MenuIcon, XIcon, RefreshIcon } from "./components/icons";
+import { MenuIcon, XIcon } from "./components/icons";
 import { INVENTORY_LOCATIONS } from "./constants";
 
 // IMPORTANTE: Asegúrate de que este import sea correcto en tu entorno.
-// Si tu archivo 'src/api/index.ts' está en la misma carpeta que 'App.tsx',
-// el path debería ser `./src/api`.
 import { api } from "./src/api";
 
-// Mock Data
+// Mock Data (Se mantiene como estaba)
 const initialSessions: CashFlowSession[] = [];
-
 const initialSupplierExpenses: SupplierExpense[] = [];
-
 const defaultIncomeSources: IncomeSource[] = [
   { id: "barra1", label: "B1" },
   { id: "barra2", label: "B2" },
@@ -77,7 +73,6 @@ const initialInventoryItems: InventoryItem[] = [
     category: "🧊 Vodka",
     stockByLocation: buildStock(25),
   },
-
   // Ron
   {
     id: "a6",
@@ -139,7 +134,6 @@ const initialInventoryItems: InventoryItem[] = [
     category: "🥥 Ron",
     stockByLocation: buildStock(0),
   },
-
   // Whisky / Bourbon
   {
     id: "a16",
@@ -255,7 +249,6 @@ const initialInventoryItems: InventoryItem[] = [
     category: "🥃 Whisky / Bourbon",
     stockByLocation: buildStock(0),
   },
-
   // Ginebra
   {
     id: "a35",
@@ -347,7 +340,6 @@ const initialInventoryItems: InventoryItem[] = [
     category: "🍸 Ginebra",
     stockByLocation: buildStock(0),
   },
-
   // Tequila
   {
     id: "a50",
@@ -427,7 +419,6 @@ const initialInventoryItems: InventoryItem[] = [
     category: "🌵 Tequila",
     stockByLocation: buildStock(0),
   },
-
   // Mezcal
   {
     id: "a63",
@@ -447,7 +438,6 @@ const initialInventoryItems: InventoryItem[] = [
     category: "🔥 Mezcal",
     stockByLocation: buildStock(0),
   },
-
   // Licores y Aperitivos
   {
     id: "a66",
@@ -641,7 +631,6 @@ const initialInventoryItems: InventoryItem[] = [
     category: "🍯 Licores y Aperitivos",
     stockByLocation: buildStock(0),
   },
-
   // Vermut
   {
     id: "a98",
@@ -691,7 +680,6 @@ const initialInventoryItems: InventoryItem[] = [
     category: "🍷 Vermut",
     stockByLocation: buildStock(0),
   },
-
   // Vinos y espumosos
   {
     id: "a106",
@@ -945,7 +933,6 @@ const initialInventoryItems: InventoryItem[] = [
     category: "🥂 Vinos y espumosos",
     stockByLocation: buildStock(0),
   },
-
   // Refrescos y agua
   {
     id: "a148",
@@ -1145,7 +1132,6 @@ const initialInventoryItems: InventoryItem[] = [
     category: "🥤Refrescos y agua",
     stockByLocation: buildStock(0),
   },
-
   // Cerveza
   {
     id: "a181",
@@ -1198,23 +1184,21 @@ const initialInventoryItems: InventoryItem[] = [
 ];
 
 const initialPurchaseOrders: PurchaseOrder[] = [];
-// --- UTILITY PARA LA HORA LOCAL ---
-/**
- * CORRECCIÓN DE HORA: Convierte la fecha UTC (guardada en el backend) a la hora local.
- */
+
+// --- FUNCIÓN DE UTILIDAD: Convierte UTC a la hora local (Definida en App.tsx) ---
 const formatUTCToLocal = (utcDateString: string | Date | undefined): string => {
   if (!utcDateString) return "N/A";
 
-  // El backend guarda la fecha como string UTC.
   return new Date(utcDateString).toLocaleString("es-ES", {
     year: "numeric",
     month: "numeric",
     day: "numeric",
     hour: "2-digit",
     minute: "2-digit",
-    hour12: false, // Formato 24 horas
+    hour12: false,
   });
 };
+
 // --- COMPONENTE PRINCIPAL ---
 const App: React.FC = () => {
   const [activeView, setActiveView] = useState<View>("inventory");
@@ -1318,7 +1302,6 @@ const App: React.FC = () => {
   const handleSavePurchaseOrder = useCallback(
     async (order: PurchaseOrder) => {
       try {
-        // Guarda/Actualiza a través de la API
         const savedOrder = await api.orders.save(order);
         addOrUpdate(setPurchaseOrders, savedOrder as PurchaseOrder);
       } catch (e) {
@@ -1336,7 +1319,6 @@ const App: React.FC = () => {
   const handleDeletePurchaseOrder = useCallback(
     async (id: string) => {
       try {
-        // Elimina a través de la API
         await api.orders.delete(id);
         deleteItem(setPurchaseOrders, id);
       } catch (e) {
@@ -1351,7 +1333,7 @@ const App: React.FC = () => {
     [deleteItem]
   );
 
-  // --- CORRECCIÓN: API Handler para Borrar Todo el Historial ---
+  // --- API Handler para Borrar Todo el Historial ---
   const handleDeleteAllHistoryRecords = useCallback(async () => {
     try {
       if (
@@ -1361,9 +1343,8 @@ const App: React.FC = () => {
       ) {
         return;
       }
-      // Llama a la API para borrar en el servidor
       await api.history.deleteAll();
-      setInventoryHistory([]); // Limpia el estado local al tener éxito
+      setInventoryHistory([]);
       alert("Historial eliminado correctamente.");
     } catch (e) {
       console.error("Error deleting all history:", e);
@@ -1400,14 +1381,11 @@ const App: React.FC = () => {
 
             let finalStock;
             if (mode === "set") {
-              // Modo 'set': establece el stock final observado (endStock)
               finalStock = newStockValue;
             } else {
-              // Modo 'add': suma la cantidad (usado para recibir pedidos)
               finalStock = currentStockInAlmacen + newStockValue;
             }
 
-            // Pone el stock final en 'Almacén' y mantiene el resto a 0
             const newStockByLocation = { ...zeroedStock, Almacén: finalStock };
             return { ...item, stockByLocation: newStockByLocation };
           }
@@ -1417,6 +1395,32 @@ const App: React.FC = () => {
     },
     []
   );
+
+  // --- FUNCIÓN DE UTILIDAD: Resetear a 0 el stock FÍSICO (Definida en App.tsx) ---
+  const handleResetInventoryStocks = useCallback(() => {
+    if (
+      !window.confirm(
+        "ADVERTENCIA: Esta acción pondrá TODO el stock físico (en todas las ubicaciones) a 0. ¿Desea continuar?"
+      )
+    ) {
+      return;
+    }
+
+    const updatesToReset: { name: string; stock: number }[] =
+      inventoryItems.map((item) => ({
+        name: item.name,
+        stock: 0,
+      }));
+
+    if (updatesToReset.length > 0) {
+      handleBulkUpdateInventoryItems(updatesToReset, "set");
+      alert(
+        "Stock físico reseteado a 0. Puede comenzar el nuevo conteo físico."
+      );
+    } else {
+      alert("No hay artículos en el inventario para resetear.");
+    }
+  }, [inventoryItems, handleBulkUpdateInventoryItems]);
 
   const renderContent = () => {
     switch (activeView) {
@@ -1444,6 +1448,9 @@ const App: React.FC = () => {
             inventoryHistory={inventoryHistory}
             onSaveInventoryRecord={handleSaveInventoryRecord}
             onDeleteAllInventoryRecords={handleDeleteAllHistoryRecords}
+            // PASAMOS LAS FUNCIONES DE UTILIDAD:
+            formatUTCToLocal={formatUTCToLocal}
+            handleResetInventoryStocks={handleResetInventoryStocks}
           />
         );
       default:
@@ -1531,7 +1538,7 @@ const App: React.FC = () => {
       </main>
 
       <footer className="bg-slate-900 text-center py-6 text-slate-500 text-sm border-t border-slate-800">
-        © 2025 Business Finance Tracker. All rights reserved.
+        © 2025 App Inventary. All rights reserved.
       </footer>
     </div>
   );
