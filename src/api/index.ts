@@ -44,7 +44,10 @@ export const api = {
         headers,
         body: JSON.stringify(data),
       }).then(handleResponse),
-    bulkUpdate: (updates: any[]) =>
+    // CORRECCIÓN: Agregar 'mode' al cuerpo de la solicitud PUT
+    bulkUpdate: (
+      updates: { name: string; stock: number; mode: "set" | "add" }[]
+    ) =>
       fetch(`${API_BASE}/inventory`, {
         method: "PUT",
         headers,
@@ -72,7 +75,6 @@ export const api = {
         headers,
         body: JSON.stringify(data),
       }).then(handleResponse),
-    // [MODIFICACIÓN] Nuevo método para borrar todo el historial
     deleteAll: () =>
       fetch(`${API_BASE}/history`, { method: "DELETE" }).then(handleResponse),
   },

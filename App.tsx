@@ -1379,10 +1379,11 @@ const App: React.FC = () => {
   );
 
   const handleBulkUpdateInventoryItems = useCallback(
-    (updates: { name: string; stock: number }[], mode: "set" | "add") => {
+    async (updates: { name: string; stock: number }[], mode: "set" | "add") => {
       const updateMap = new Map(
         updates.map((u) => [u.name.toLowerCase(), u.stock])
       );
+      // Se utiliza INVENTORY_LOCATIONS para inicializar el stock a 0 en todas las ubicaciones.
       const zeroedStock = INVENTORY_LOCATIONS.reduce(
         (acc, loc) => ({ ...acc, [loc]: 0 }),
         {}
@@ -1396,19 +1397,31 @@ const App: React.FC = () => {
 
             let finalStock;
             if (mode === "set") {
-              // Si mode es 'set' (ej: reseteo o sync), establecemos el nuevo valor
+              // Si mode es 'set' (ej: reseteo o sync), el frontend calcula el valor final
               finalStock = newStockValue;
             } else {
               // Si mode es 'add', sumamos
               finalStock = currentStockInAlmacen + newStockValue;
             }
 
+            // En el frontend, la lógica es que el stock se mantiene en el Almacén si se resetea o añade
             const newStockByLocation = { ...zeroedStock, Almacén: finalStock };
             return { ...item, stockByLocation: newStockByLocation };
           }
           return item;
         });
       });
+
+      // 💥 AÑADIDO: Llamar a la API para persistir el cambio en el servidor
+      const updatesWithMode = updates.map((u) => ({ ...u, mode }));
+      try {
+        await api.inventory.bulkUpdate(updatesWithMode);
+      } catch (e) {
+        console.error("Error al persistir el cambio de stock masivo:", e);
+        alert(
+          "Error al guardar los cambios de stock en el servidor. Revise la consola."
+        );
+      }
     },
     []
   );
