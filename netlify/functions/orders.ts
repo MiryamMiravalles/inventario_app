@@ -1,10 +1,11 @@
 import { Handler } from "@netlify/functions";
+// 🛑 CORRECCIÓN: Usar importación por defecto
 import connectToDatabase from "./utils/db";
 import { PurchaseOrderModel } from "./models";
 import mongoose from "mongoose";
 
 const handler: Handler = async (event, context) => {
-  context.callbackWaitsForEmptyEventLoop = false; // 1. Conexión a la base de datos (con manejo de errores de conexión)
+  context.callbackWaitsForEmptyEventLoop = false;
 
   try {
     await connectToDatabase();
@@ -34,7 +35,6 @@ const handler: Handler = async (event, context) => {
 
   try {
     if (event.httpMethod === "GET") {
-      // La función connectToDatabase debe estar importada como default
       const orders = await (PurchaseOrderModel.find as any)().sort({
         orderDate: -1,
       });
@@ -43,16 +43,19 @@ const handler: Handler = async (event, context) => {
 
     if (event.httpMethod === "POST") {
       const data = JSON.parse(event.body || "{}");
-      console.log("Processing POST request for order:", data.id || "new");
+      const orderToSave: any = { ...data }; // 🚨 NUEVA LÍNEA DE DEBUG: Muestra la carga útil antes de guardar
 
-      const orderToSave: any = { ...data }; // 1. Mapear 'id' del frontend a '_id' de Mongoose.
+      console.log(
+        "Order payload before save:",
+        JSON.stringify(orderToSave, null, 2)
+      );
 
       if (!orderToSave.id) {
-        orderToSave.id = new mongoose.Types.ObjectId().toHexString(); // Fallback ID if missing
+        orderToSave.id = new mongoose.Types.ObjectId().toHexString();
       }
 
       orderToSave._id = orderToSave.id;
-      delete orderToSave.id; // 2. Usar findOneAndUpdate con upsert: true para manejar la creación/actualización.
+      delete orderToSave.id;
 
       const updatedOrNewOrder = await (
         PurchaseOrderModel.findOneAndUpdate as any
@@ -91,5 +94,4 @@ const handler: Handler = async (event, context) => {
   }
 };
 
-// Se utiliza la exportación explícita para evitar problemas de inicialización en Netlify CLI
 export { handler };
