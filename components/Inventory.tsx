@@ -508,25 +508,16 @@ const InventoryComponent: React.FC<InventoryProps> = ({
   };
 
   const handleSaveOrder = () => {
-    const orderToSave = {
-      ...currentPurchaseOrder,
-      items: currentPurchaseOrder.items.map((item) => ({
-        ...item,
-        costAtTimeOfPurchase: 0,
-      })),
-      totalAmount: 0,
-      status: PurchaseOrderStatus.Pending,
-    };
-
+    // La validación de si se puede guardar se realiza en el botón dentro de renderOrderForm
     onSavePurchaseOrder({
       id: (currentPurchaseOrder as PurchaseOrder).id || crypto.randomUUID(),
-      ...orderToSave,
+      ...currentPurchaseOrder,
     });
 
     alert(
       "Pedido guardado correctamente. Los artículos aparecerán en 'En Pedidos' hasta ser recibidos."
     );
-    closeOrderModal();
+    closeOrderModal(); // <-- CORREGIDO
   };
 
   const handleReceiveOrder = (order: PurchaseOrder) => {
@@ -561,15 +552,55 @@ const InventoryComponent: React.FC<InventoryProps> = ({
   };
 
   // ---- Order Items Handlers ----
-  const addOrderItem = () => {
+  // 💥 FUNCIÓN AÑADIDA para el botón de añadir productos desde la búsqueda
+  const handleAddProductFromSearch = (item: InventoryItem) => {
+    const isAlreadyInOrder = currentPurchaseOrder.items.some(
+      (oi) => oi.inventoryItemId === item.id
+    );
+
+    if (isAlreadyInOrder) return;
+
+    // Add item with a default quantity of 1 (to satisfy the "positive quantity" validation)
     const newItem: OrderItem = {
-      inventoryItemId: "",
+      inventoryItemId: item.id,
       quantity: 1,
       costAtTimeOfPurchase: 0,
     };
+
+    const newIndex = currentPurchaseOrder.items.length;
+
+    setCurrentPurchaseOrder((prev) => {
+      // 💥 CORRECCIÓN CLAVE: Aseguramos que la adición se haga de forma atómica para que canSave vea el cambio
+      const newItemsList = [...prev.items, newItem];
+      return { ...prev, items: newItemsList };
+    });
+
+    // Initialize the temp quantity input value to '1'
+    setTempOrderQuantities((prev) => ({
+      ...prev,
+      // Usamos el nuevo tamaño de la lista de items (el nuevo índice)
+      [newIndex]: "1",
+    }));
+
+    setOrderSearchTerm(""); // Clear search after adding
+  };
+
+  // Función para añadir producto manualmente (sin selección inicial)
+  const addOrderItem = () => {
+    const newItem: OrderItem = {
+      inventoryItemId: "",
+      quantity: 1, // Inicializar a 1 para activar el botón Guardar
+      costAtTimeOfPurchase: 0,
+    };
+    const newIndex = currentPurchaseOrder.items.length;
     setCurrentPurchaseOrder((prev) => ({
       ...prev,
       items: [...prev.items, newItem],
+    }));
+    // Inicializar la cantidad temporal para que aparezca "1" en el input
+    setTempOrderQuantities((prevValues) => ({
+      ...prevValues,
+      [newIndex]: "1",
     }));
   };
 
@@ -586,12 +617,14 @@ const InventoryComponent: React.FC<InventoryProps> = ({
     }
     setTempOrderQuantities((prev) => ({ ...prev, [index]: value }));
 
-    const newItems = [...currentPurchaseOrder.items];
     const parsedQuantity = parseDecimal(value);
-    if (newItems[index].quantity !== parsedQuantity) {
-      newItems[index] = { ...newItems[index], quantity: parsedQuantity };
-      setCurrentPurchaseOrder((prev) => ({ ...prev, items: newItems }));
-    }
+    setCurrentPurchaseOrder((prev) => {
+      const newItems = [...prev.items];
+      if (newItems[index].quantity !== parsedQuantity) {
+        newItems[index] = { ...newItems[index], quantity: parsedQuantity };
+      }
+      return { ...prev, items: newItems };
+    });
   };
 
   const handleOrderItemChange = (
@@ -831,12 +864,9 @@ const InventoryComponent: React.FC<InventoryProps> = ({
                     ? item.endStock.toFixed(1).replace(".", ",")
                     : "-"}
                 </td>
+                {/* 💥 MODIFICACIÓN: Texto grande y rojo para el Consumo */}
                 <td
-                  className={`px-2 py-2 whitespace-nowrap text-sm text-right font-bold ${
-                    item.consumption !== undefined && item.consumption >= 0
-                      ? "text-green-400"
-                      : "text-red-400"
-                  }`}
+                  className={`px-2 py-2 whitespace-nowrap text-lg text-right font-bold text-red-400`}
                 >
                   {item.consumption !== undefined
                     ? item.consumption.toFixed(1).replace(".", ",")
@@ -1009,8 +1039,26 @@ const InventoryComponent: React.FC<InventoryProps> = ({
   );
 
   const renderOrderForm = () => {
+    // 💥 LÓGICA DE VALIDACIÓN:
+    // 1. Debe haber al menos un artículo con cantidad > 0.
+    const hasItemsWithQuantity = currentPurchaseOrder.items.some(
+      (item) => item.quantity > 0.001
+    );
+    // 2. Debe haber nombre de proveedor.
+    const hasSupplierName = currentPurchaseOrder.supplierName.trim() !== "";
+
+    const canSave = hasItemsWithQuantity && hasSupplierName;
+
+    let disabledTitle = "Guardar pedido";
+
+    if (!hasSupplierName) {
+      disabledTitle = "Introduce el proveedor para guardar";
+    } else if (!hasItemsWithQuantity) {
+      disabledTitle = "Añade al menos un artículo para guardar";
+    }
+
     return (
-      <div className="space-y-4 max-h-[70vh] overflow-y-auto p-1">
+      <div className="space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <input
             type="date"
@@ -1061,30 +1109,27 @@ const InventoryComponent: React.FC<InventoryProps> = ({
                 (oi) => oi.inventoryItemId === item.id
               );
 
-              if (isAlreadyInOrder) return null;
-
               return (
                 <div
                   key={item.id}
-                  className="flex justify-between items-center p-2 hover:bg-slate-700/50 rounded-sm"
+                  className={`flex justify-between items-center p-2 rounded-sm ${
+                    isAlreadyInOrder
+                      ? "opacity-50 cursor-not-allowed"
+                      : "hover:bg-slate-700/50"
+                  }`}
                 >
                   <span className="text-white text-sm">{item.name}</span>
+                  {/* 💥 BOTÓN AÑADIR PRODUCTO (Nueva lógica) */}
                   <button
-                    onClick={() => {
-                      const newItem: OrderItem = {
-                        inventoryItemId: item.id,
-                        quantity: 1,
-                        costAtTimeOfPurchase: 0,
-                      };
-                      setCurrentPurchaseOrder((prev) => ({
-                        ...prev,
-                        items: [...prev.items, newItem],
-                      }));
-                      setOrderSearchTerm("");
-                    }}
-                    className="p-1 bg-indigo-600 hover:bg-indigo-700 rounded text-white text-xs"
+                    onClick={() => handleAddProductFromSearch(item)}
+                    className={`p-1 rounded text-white text-xs flex items-center gap-1 ${
+                      isAlreadyInOrder
+                        ? "bg-gray-500 cursor-not-allowed"
+                        : "bg-green-600 hover:bg-green-700"
+                    }`}
+                    disabled={isAlreadyInOrder}
                   >
-                    Añadir
+                    {isAlreadyInOrder ? "Añadido" : "Añadir"}
                   </button>
                 </div>
               );
@@ -1159,12 +1204,36 @@ const InventoryComponent: React.FC<InventoryProps> = ({
           );
         })}
 
+        {/* 💥 RESTAURADO EL BOTÓN AÑADIR MANUALMENTE */}
         <button
           onClick={addOrderItem}
           className="text-indigo-400 hover:text-indigo-300 text-sm font-semibold"
         >
           + Añadir Artículo (manualmente)
         </button>
+
+        {/* 💥 Footer con botones controlados manualmente */}
+        <div className="flex justify-end p-4 border-t border-gray-700 rounded-b-lg mt-4 bg-gray-800">
+          <button
+            onClick={closeOrderModal} // <-- CORREGIDO
+            className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg mr-2 transition duration-300"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={handleSaveOrder}
+            disabled={!canSave}
+            className={`font-bold py-2 px-4 rounded-lg transition duration-300 ${
+              canSave
+                ? "bg-indigo-600 hover:bg-indigo-700 text-white"
+                : "bg-slate-700 text-slate-500 cursor-not-allowed"
+            }`}
+            title={disabledTitle}
+          >
+            Guardar
+          </button>
+        </div>
+        {/* 💥 FIN DEL FOOTER MANUAL */}
       </div>
     );
   };
@@ -1228,20 +1297,6 @@ const InventoryComponent: React.FC<InventoryProps> = ({
                 <RefreshIcon />
                 <span className="hidden sm:inline">Resetear Inventario</span>
               </button>
-
-              {/* Selector de fecha para el Snapshot */}
-              <label
-                htmlFor="snapshotDate"
-                className="text-sm font-medium text-gray-300 hidden md:inline"
-              ></label>
-              <input
-                id="snapshotDate"
-                type="date"
-                value={snapshotDate}
-                onChange={(e) => setSnapshotDate(e.target.value)}
-                className="bg-gray-700 text-white rounded p-2 w-40 border border-gray-600"
-              />
-              {/* FIN NUEVO */}
 
               <button
                 onClick={handleSaveInventorySnapshot}
@@ -1341,10 +1396,19 @@ const InventoryComponent: React.FC<InventoryProps> = ({
                                 />
                               </td>
                             ))}
-                            <td className="px-4 py-2 whitespace-nowrap text-lg text-green-400 font-bold w-20">
-                              {calculateTotalStock(item)
-                                .toFixed(1)
-                                .replace(".", ",")}
+                            <td className="px-4 py-2 whitespace-nowrap text-lg font-bold w-20">
+                              {/* Color condicional para el total en Inventario */}
+                              <span
+                                className={
+                                  calculateTotalStock(item) > 0.001
+                                    ? "text-green-400"
+                                    : "text-slate-400"
+                                }
+                              >
+                                {calculateTotalStock(item)
+                                  .toFixed(1)
+                                  .replace(".", ",")}
+                              </span>
                             </td>
                             <td className="px-4 py-2 whitespace-nowrap text-right text-sm w-20">
                               <button
@@ -1470,23 +1534,12 @@ const InventoryComponent: React.FC<InventoryProps> = ({
 
       {activeTab === "analysis" && (
         <div className="bg-gray-800 shadow-xl rounded-lg overflow-x-auto p-4">
-          <div className="flex flex-col sm:flex-row justify-between items-start md:items-center mb-4 gap-4">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4">
             <h2 className="text-xl font-bold text-white">
               Análisis de Consumo Semanal
             </h2>
 
             <div className="flex items-center gap-2 flex-wrap">
-              <label
-                htmlFor="analysisDate"
-                className="text-sm font-medium text-gray-300"
-              ></label>
-              <input
-                id="analysisDate"
-                type="date"
-                value={analysisDate}
-                onChange={(e) => setAnalysisDate(e.target.value)}
-                className="bg-gray-700 text-white rounded p-2 w-40 border border-gray-600"
-              />
               <button
                 onClick={handleSaveCurrentInventory}
                 className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2 transition duration-300"
@@ -1657,8 +1710,8 @@ const InventoryComponent: React.FC<InventoryProps> = ({
           title={
             "id" in currentPurchaseOrder ? "Editar Pedido" : "Nuevo Pedido"
           }
-          onClose={closeOrderModal}
-          onSave={handleSaveOrder}
+          onClose={closeOrderModal} // <-- CORREGIDO
+          hideSaveButton={true} // Oculta el botón nativo del Modal
         >
           {renderOrderForm()}
         </Modal>
