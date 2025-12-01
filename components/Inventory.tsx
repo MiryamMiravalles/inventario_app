@@ -551,10 +551,6 @@ const InventoryComponent: React.FC<InventoryProps> = ({
       status: PurchaseOrderStatus.Completed,
       deliveryDate: new Date().toISOString().split("T")[0],
     } as PurchaseOrder);
-
-    alert(
-      `Pedido de ${order.supplierName} marcado como recibido y completado. Las cantidades AHORA se reflejan en la columna \"En Pedidos\" de la pestaña Análisis. No se realizó ajuste automático al stock.`
-    );
   };
 
   const handleOrderChange = (
@@ -1237,9 +1233,7 @@ const InventoryComponent: React.FC<InventoryProps> = ({
               <label
                 htmlFor="snapshotDate"
                 className="text-sm font-medium text-gray-300 hidden md:inline"
-              >
-                Fecha:
-              </label>
+              ></label>
               <input
                 id="snapshotDate"
                 type="date"
@@ -1485,9 +1479,7 @@ const InventoryComponent: React.FC<InventoryProps> = ({
               <label
                 htmlFor="analysisDate"
                 className="text-sm font-medium text-gray-300"
-              >
-                Fecha:
-              </label>
+              ></label>
               <input
                 id="analysisDate"
                 type="date"
