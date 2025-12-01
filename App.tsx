@@ -17,7 +17,7 @@ import { INVENTORY_LOCATIONS } from "./constants";
 // IMPORTANTE: Asegúrate de que este import sea correcto en tu entorno.
 import { api } from "./src/api";
 
-// Mock Data (Se mantiene como estaba)
+// Mock Data (Configuración Limpia)
 const initialSessions: CashFlowSession[] = [];
 const initialSupplierExpenses: SupplierExpense[] = [];
 const defaultIncomeSources: IncomeSource[] = [
@@ -36,42 +36,44 @@ const initialStockByLocation = INVENTORY_LOCATIONS.reduce(
   {}
 );
 
-const buildStock = (mainLocationStock: number, location = "Almacén") => ({
+// Función para construir el stock: ahora siempre iniciará en 0, a menos que se fuerce una localización.
+const buildStock = (mainLocationStock: number = 0, location = "Almacén") => ({
   ...initialStockByLocation,
   [location]: mainLocationStock,
 });
 
+// 💥 CORRECCIÓN: Todos los items se inicializan a 0 usando buildStock(0)
 const initialInventoryItems: InventoryItem[] = [
   // Vodka
   {
     id: "a1",
     name: "Absolut",
     category: "🧊 Vodka",
-    stockByLocation: buildStock(50),
+    stockByLocation: buildStock(0),
   },
   {
     id: "a2",
     name: "Beluga",
     category: "🧊 Vodka",
-    stockByLocation: buildStock(12),
+    stockByLocation: buildStock(0),
   },
   {
     id: "a3",
     name: "Belvedere",
     category: "🧊 Vodka",
-    stockByLocation: buildStock(15),
+    stockByLocation: buildStock(0),
   },
   {
     id: "a4",
     name: "Grey Goose",
     category: "🧊 Vodka",
-    stockByLocation: buildStock(18),
+    stockByLocation: buildStock(0),
   },
   {
     id: "a5",
     name: "Vozca Negro",
     category: "🧊 Vodka",
-    stockByLocation: buildStock(25),
+    stockByLocation: buildStock(0),
   },
   // Ron
   {
@@ -1106,7 +1108,7 @@ const initialInventoryItems: InventoryItem[] = [
     id: "a176",
     name: "Schweppes Tonica",
     category: "🥤Refrescos y agua",
-    stockByLocation: buildStock(200),
+    stockByLocation: buildStock(0),
   },
   {
     id: "a177",
@@ -1314,6 +1316,7 @@ const App: React.FC = () => {
   const handleSavePurchaseOrder = useCallback(
     async (order: PurchaseOrder) => {
       try {
+        // Lógica de guardado en API (Netlify Function)
         const savedOrder = await api.orders.save(order);
         addOrUpdate(setPurchaseOrders, savedOrder as PurchaseOrder);
       } catch (e) {
@@ -1393,8 +1396,10 @@ const App: React.FC = () => {
 
             let finalStock;
             if (mode === "set") {
+              // Si mode es 'set' (ej: reseteo o sync), establecemos el nuevo valor
               finalStock = newStockValue;
             } else {
+              // Si mode es 'add', sumamos
               finalStock = currentStockInAlmacen + newStockValue;
             }
 
