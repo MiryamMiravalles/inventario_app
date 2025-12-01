@@ -1,13 +1,11 @@
-// netlify/functions/orders.ts
 import { Handler } from "@netlify/functions";
-import { connectToDatabase } from "./utils/db";
+import connectToDatabase from "./utils/db";
 import { PurchaseOrderModel } from "./models";
 import mongoose from "mongoose";
 
 const handler: Handler = async (event, context) => {
-  context.callbackWaitsForEmptyEventLoop = false;
+  context.callbackWaitsForEmptyEventLoop = false; // 1. Conexión a la base de datos (con manejo de errores de conexión)
 
-  // 1. Conexión a la base de datos (con manejo de errores de conexión)
   try {
     await connectToDatabase();
     console.log("Database connection established for orders function.");
@@ -36,7 +34,7 @@ const handler: Handler = async (event, context) => {
 
   try {
     if (event.httpMethod === "GET") {
-      // CORRECCIÓN TS2349: Tipado explícito a 'any'
+      // La función connectToDatabase debe estar importada como default
       const orders = await (PurchaseOrderModel.find as any)().sort({
         orderDate: -1,
       });
@@ -47,18 +45,15 @@ const handler: Handler = async (event, context) => {
       const data = JSON.parse(event.body || "{}");
       console.log("Processing POST request for order:", data.id || "new");
 
-      const orderToSave: any = { ...data };
+      const orderToSave: any = { ...data }; // 1. Mapear 'id' del frontend a '_id' de Mongoose.
 
-      // 1. Mapear 'id' del frontend a '_id' de Mongoose.
       if (!orderToSave.id) {
         orderToSave.id = new mongoose.Types.ObjectId().toHexString(); // Fallback ID if missing
       }
 
       orderToSave._id = orderToSave.id;
-      delete orderToSave.id;
+      delete orderToSave.id; // 2. Usar findOneAndUpdate con upsert: true para manejar la creación/actualización.
 
-      // 2. Usar findOneAndUpdate con upsert: true para manejar la creación/actualización.
-      // CORRECCIÓN TS2349: Tipado explícito a 'any'
       const updatedOrNewOrder = await (
         PurchaseOrderModel.findOneAndUpdate as any
       )({ _id: orderToSave._id }, orderToSave, {
@@ -77,7 +72,6 @@ const handler: Handler = async (event, context) => {
 
     if (event.httpMethod === "DELETE") {
       const { id } = event.queryStringParameters || {};
-      // CORRECCIÓN TS2349: Tipado explícito a 'any'
       await (PurchaseOrderModel.findByIdAndDelete as any)(id);
       return {
         statusCode: 200,

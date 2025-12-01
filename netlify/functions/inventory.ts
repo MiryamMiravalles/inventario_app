@@ -1,8 +1,8 @@
 import { Handler } from "@netlify/functions";
-import { connectToDatabase } from "./utils/db";
+import connectToDatabase from "./utils/db";
 import { InventoryItemModel } from "./models";
 import mongoose from "mongoose";
-import { INVENTORY_LOCATIONS } from "../../constants"; // Asegúrate de importar INVENTORY_LOCATIONS si lo usas
+import { INVENTORY_LOCATIONS } from "../../constants";
 
 export const handler: Handler = async (event, context) => {
   context.callbackWaitsForEmptyEventLoop = false;
@@ -29,18 +29,14 @@ export const handler: Handler = async (event, context) => {
 
     if (event.httpMethod === "POST") {
       const data = JSON.parse(event.body || "{}");
-
-      const itemToSave: any = { ...data };
-
-      // Mapear 'id' del frontend a '_id' de Mongoose y asegurar un ID
+      const itemToSave: any = { ...data }; // Mapear 'id' del frontend a '_id' de Mongoose y asegurar un ID
       if (!itemToSave.id) {
         itemToSave.id = new mongoose.Types.ObjectId().toHexString();
       }
 
       itemToSave._id = itemToSave.id;
-      delete itemToSave.id;
+      delete itemToSave.id; // Usar findOneAndUpdate con upsert: true para manejar la creación/actualización por ID de cliente
 
-      // Usar findOneAndUpdate con upsert: true para manejar la creación/actualización por ID de cliente
       const updatedOrNewItem = await (
         InventoryItemModel.findOneAndUpdate as any
       )({ _id: itemToSave._id }, itemToSave, {
@@ -55,12 +51,10 @@ export const handler: Handler = async (event, context) => {
         body: JSON.stringify(updatedOrNewItem),
       };
     }
-
     if (event.httpMethod === "PUT") {
       // Manejar actualizaciones masivas de stock (ej. reseteo a 0 o sincronización)
       const updates: { name: string; stock: number; mode: "set" | "add" }[] =
         JSON.parse(event.body || "[]");
-
       if (!Array.isArray(updates) || updates.length === 0) {
         return {
           statusCode: 400,
@@ -75,16 +69,8 @@ export const handler: Handler = async (event, context) => {
         .map((update) => {
           // La lógica de frontend (App.tsx) realiza las operaciones sobre 'Almacén'
           const fieldToUpdate = `stockByLocation.Almacén`;
-
           let updateOperation = {};
           if (update.mode === "set") {
-            // Para el reseteo (mode: "set"), se resetean todas las ubicaciones a 0,
-            // y luego se establece el stock en 'Almacén' al valor deseado.
-            // Como el frontend gestiona la complejidad del 'stockByLocation' y solo pasa
-            // el stock final para 'Almacén', asumiremos que 'stockByLocation' se envía completo
-            // si se necesita resetear todo.
-
-            // Si el frontend está enviando solo {name, stock}, solo actualizamos el stock principal.
             updateOperation = { $set: { [fieldToUpdate]: update.stock } };
           } else if (update.mode === "add") {
             updateOperation = { $inc: { [fieldToUpdate]: update.stock } };
@@ -126,7 +112,7 @@ export const handler: Handler = async (event, context) => {
 
     return { statusCode: 405, headers, body: "Method Not Allowed" };
   } catch (error: any) {
-    console.error("Inventory function error:", error);
+    console.error("Inventory function error:", error); // Incluimos el mensaje de error para facilitar la depuración en el frontend
     return {
       statusCode: 500,
       headers,

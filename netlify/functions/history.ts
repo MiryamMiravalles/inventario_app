@@ -1,6 +1,6 @@
 // netlify/functions/history.ts
 import { Handler } from "@netlify/functions";
-import { connectToDatabase } from "./utils/db";
+import connectToDatabase from "./utils/db";
 import { InventoryRecordModel } from "./models";
 
 const handler: Handler = async (event, context) => {
