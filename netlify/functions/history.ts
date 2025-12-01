@@ -42,7 +42,7 @@ const handler: Handler = async (event, context) => {
 
     if (event.httpMethod === "POST") {
       const data = JSON.parse(event.body || "{}");
-      const recordToSave: any = { ...data }; // 💡 GUARDA HORA UTC DEL SERVIDOR
+      const recordToSave: any = { ...data };
 
       recordToSave.date = new Date();
 

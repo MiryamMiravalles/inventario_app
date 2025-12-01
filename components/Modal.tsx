@@ -1,5 +1,5 @@
 import React from "react";
-import { XIcon } from "./icons";
+import { XIcon } from "./icons"; // Asumiendo que XIcon está definido en icons.tsx
 
 interface ModalProps {
   title: string;
@@ -17,7 +17,7 @@ const Modal: React.FC<ModalProps> = ({
   onClose,
   onSave,
   hideSaveButton = false,
-  // Usamos max-w-2xl como valor por defecto si no se pasa 'size'
+  // Valor por defecto si no se especifica el tamaño
   size = "max-w-2xl",
 }) => {
   return (
@@ -26,8 +26,8 @@ const Modal: React.FC<ModalProps> = ({
       onClick={onClose}
     >
       <div
-        // APLICAMOS LA PROP 'size' AQUÍ:
-        className={`bg-gray-800 rounded-lg shadow-2xl w-full ${size} transform transition-all duration-300 scale-95 hover:scale-100`}
+        // APLICACIÓN DE LA CORRECCIÓN: Usar la prop 'size'
+        className={`bg-gray-800 rounded-lg shadow-2xl w-full ${size} transform transition-all duration-300 scale-95`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex justify-between items-center p-4 border-b border-gray-700">

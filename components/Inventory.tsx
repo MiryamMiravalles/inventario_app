@@ -12,10 +12,10 @@ import {
   PlusIcon,
   PencilIcon,
   TrashIcon,
-  GoogleDriveIcon,
   ChevronDownIcon,
   SearchIcon,
   InventoryIcon,
+  RefreshIcon, // <-- IMPORTADO
 } from "./icons";
 import { INVENTORY_LOCATIONS } from "../constants";
 
@@ -53,18 +53,7 @@ const emptyPurchaseOrder: Omit<PurchaseOrder, "id"> = {
   totalAmount: 0,
 };
 
-// --- Mock Data for Drive Simulation (Se mantiene) ---
-const mockDriveFiles: { id: string; name: string }[] = [
-  { id: "file1", name: "Stock Semanal - Bebidas.csv" },
-  { id: "file2", name: "Inventario General - Cocina.csv" },
-  { id: "file3", name: "Control de Stock - Barra.csv" },
-];
-
-const mockFileContents: { [key: string]: string } = {
-  file1: "Absolut, 60\nSchweppes Tonica, 300",
-  file2: "Naranja, 150",
-  file3: "Absolut, 55\nNaranja, 120\nSchweppes Tonica, 250",
-};
+// --- ELIMINADO: Mock Data para Drive ---
 
 const parseDecimal = (input: string): number => {
   if (typeof input !== "string" || !input) return 0;
@@ -104,14 +93,17 @@ interface CategoryAccordionProps {
   title: string;
   children: React.ReactNode;
   itemCount: number;
+  initialOpen?: boolean; // NUEVA PROP
 }
 
 const CategoryAccordion: React.FC<CategoryAccordionProps> = ({
   title,
   children,
   itemCount,
+  initialOpen = false, // USAMOS FALSE COMO VALOR POR DEFECTO
 }) => {
-  const [isOpen, setIsOpen] = useState(true);
+  // Inicializamos el estado con la prop, permitiendo control por el padre
+  const [isOpen, setIsOpen] = useState(initialOpen);
 
   return (
     <div className="bg-slate-800 rounded-lg shadow-lg">
@@ -145,7 +137,7 @@ const CategoryAccordion: React.FC<CategoryAccordionProps> = ({
   );
 };
 
-// --- COMPONENTE DE ANÁLISIS SEMANAL (Ahora recibe formatUTCToLocal) ---
+// --- COMPONENTE DE ANÁLISIS SEMANAL (Se mantiene) ---
 interface WeeklyConsumptionAnalysisProps {
   inventoryHistory: InventoryRecord[];
   formatUTCToLocal: (utcDateString: string | Date | undefined) => string;
@@ -155,10 +147,14 @@ const WeeklyConsumptionAnalysis: React.FC<WeeklyConsumptionAnalysisProps> = ({
   inventoryHistory,
   formatUTCToLocal,
 }) => {
-  // Obtiene el registro de análisis más reciente
+  // CORRECCIÓN: Usa `inventoryHistory` (la prop) para la búsqueda.
   const lastRecord = useMemo(() => {
     if (!inventoryHistory || inventoryHistory.length === 0) return null;
-    return inventoryHistory.find((r) => r.type === "analysis");
+
+    // Busca el último análisis (tipo 'analysis')
+    return (inventoryHistory as InventoryRecord[]).find(
+      (r) => r.type === "analysis"
+    );
   }, [inventoryHistory]);
 
   if (!lastRecord) {
@@ -255,31 +251,36 @@ const InventoryComponent: React.FC<InventoryProps> = ({
     Record<number, string>
   >({});
 
-  const [isDriveModalOpen, setDriveModalOpen] = useState(false);
-  const [connectedFile, setConnectedFile] = useState<{
-    id: string;
-    name: string;
-  } | null>(null);
-  const [isSyncing, setIsSyncing] = useState(false);
-
+  // 💥 CORRECCIÓN: Declaración de estado para valores de stock temporal
   const [tempStockValues, setTempStockValues] = useState<
     Record<string, string>
   >({});
-  const [endOfWeekStock, setEndOfWeekStock] = useState<{
-    [key: string]: string;
-  }>({});
 
   const [analysisDate, setAnalysisDate] = useState(
     new Date().toISOString().split("T")[0]
   );
 
+  // ESTADO: Fecha para la instantánea de inventario
+  const [snapshotDate, setSnapshotDate] = useState(
+    new Date().toISOString().split("T")[0]
+  );
+
   const [searchTerm, setSearchTerm] = useState("");
 
+  // CORRECCIÓN TS2451: El setter se llama 'setOrderSearchTerm'
   const [orderSearchTerm, setOrderSearchTerm] = useState("");
 
   const [viewingRecord, setViewingRecord] = useState<InventoryRecord | null>(
     null
   );
+
+  const calculateTotalStock = (item: InventoryItem) => {
+    if (!item.stockByLocation) return 0;
+    return Object.values(item.stockByLocation).reduce(
+      (sum, val) => sum + (Number(val) || 0),
+      0
+    );
+  };
 
   // Asegura que el historial esté en un array válido y ordenado por fecha descendente (más reciente primero)
   const validInventoryHistory = useMemo(() => {
@@ -288,7 +289,49 @@ const InventoryComponent: React.FC<InventoryProps> = ({
     ) as InventoryRecord[];
   }, [inventoryHistory]);
 
-  // ... (Efectos y cálculos como useMemo, useEffect, etc. se mantienen) ...
+  // CORRECCIÓN TS2304: Mover la definición de stockInOrders.
+  const stockInOrders = useMemo(() => {
+    const pending: { [key: string]: number } = {};
+    purchaseOrders
+      .filter((o) => o.status === PurchaseOrderStatus.Completed)
+      .forEach((o) => {
+        o.items.forEach((item) => {
+          pending[item.inventoryItemId] =
+            (pending[item.inventoryItemId] || 0) + item.quantity;
+        });
+      });
+    return pending;
+  }, [purchaseOrders]);
+
+  // NUEVO: Memo para obtener el último stock final (para el cálculo de Stock Inicial Total)
+  const lastRecord = useMemo(() => {
+    // Busca el último análisis (tipo 'analysis')
+    const analysisRecord = validInventoryHistory.find(
+      (r) => r.type === "analysis"
+    );
+    if (analysisRecord) return analysisRecord;
+
+    // Si no hay análisis, busca el último snapshot (tipo 'snapshot')
+    const snapshotRecord = validInventoryHistory.find(
+      (r) => r.type === "snapshot"
+    );
+    return snapshotRecord;
+  }, [validInventoryHistory]);
+
+  const initialStockMap = useMemo(() => {
+    if (!lastRecord) return new Map<string, number>();
+
+    // Usa item.endStock (Stock Final) del último registro como base.
+    return new Map<string, number>(
+      lastRecord.items.map((item) => [
+        item.itemId,
+        item.endStock || item.initialStock || 0,
+      ])
+    );
+  }, [lastRecord]);
+
+  // ELIMINADO: useEffect para precargar Stock Fin de Semana
+  // ELIMINADO: handleEndStockChange para el input
 
   useEffect(() => {
     if (!isOrderModalOpen) return;
@@ -331,6 +374,38 @@ const InventoryComponent: React.FC<InventoryProps> = ({
       return acc;
     }, {} as { [key: string]: InventoryItem[] });
   }, [filteredItems]);
+
+  // --- Análisis de Consumo: Agrupación y Ordenación (para Acordeones) ---
+  const analysisGroupedItems = useMemo(() => {
+    const groups: { [key: string]: typeof inventoryItems } = {};
+
+    // Agrupamos todos los items por categoría
+    inventoryItems.forEach((item) => {
+      const category = item.category || "Uncategorized";
+      if (!groups[category]) groups[category] = [];
+      groups[category].push(item);
+    });
+
+    // Ordenamos las categorías
+    const sortedGroups = Object.entries(groups).sort(([catA], [catB]) => {
+      const indexA = CATEGORY_ORDER.indexOf(catA);
+      const indexB = CATEGORY_ORDER.indexOf(catB);
+      if (indexA !== -1 && indexB !== -1) return indexA - indexB;
+      if (indexA !== -1) return -1;
+      if (indexB !== -1) return 1;
+      return catA.localeCompare(catB);
+    });
+
+    // Calculamos la "existencia relevante" (stock actual + pedidos pendientes) de la categoría para la lógica de apertura
+    return sortedGroups.map(([category, items]) => {
+      const categoryTotalRelevantStock = items.reduce((sum, item) => {
+        const currentStock = calculateTotalStock(item);
+        const pendingStock = stockInOrders[item.id] || 0;
+        return sum + currentStock + pendingStock; // Suma de stock físico + pedidos
+      }, 0);
+      return { category, items, categoryTotalRelevantStock };
+    });
+  }, [inventoryItems, stockInOrders]);
 
   // ---- Inventory Modal Handlers ----
   const openInventoryModal = (item?: InventoryItem) => {
@@ -402,14 +477,6 @@ const InventoryComponent: React.FC<InventoryProps> = ({
         return newTemp;
       });
     }
-  };
-
-  const calculateTotalStock = (item: InventoryItem) => {
-    if (!item.stockByLocation) return 0;
-    return Object.values(item.stockByLocation).reduce(
-      (sum, val) => sum + (Number(val) || 0),
-      0
-    );
   };
 
   // ---- Order Modal Handlers ----
@@ -542,55 +609,60 @@ const InventoryComponent: React.FC<InventoryProps> = ({
     setCurrentPurchaseOrder((prev) => ({ ...prev, items: newItems }));
   };
 
-  // ---- Google Drive Simulation Handlers ----
-  const handleFileSelect = (file: { id: string; name: string }) => {
-    setConnectedFile(file);
-    setDriveModalOpen(false);
-  };
-
-  const handleSync = () => {
-    if (!connectedFile) return;
-
-    setIsSyncing(true);
-    setTimeout(() => {
-      const fileContent = mockFileContents[connectedFile.id];
-      const lines = fileContent
-        .split("\n")
-        .filter((line) => line.trim() !== "");
-      const updates = lines
-        .map((line) => {
-          const [name, stockStr] = line.split(",").map((s) => s.trim());
-          const stock = parseFloat(stockStr);
-          return { name, stock: isNaN(stock) ? 0 : stock };
-        })
-        .filter((u) => u.name);
-
-      if (updates.length > 0) {
-        onBulkUpdateInventoryItems(updates, "set");
-      }
-      setIsSyncing(false);
-    }, 1000);
-  };
-
-  // ---- Analysis Handlers ----
-  const stockInOrders = useMemo(() => {
-    const pending: { [key: string]: number } = {};
-    purchaseOrders
-      .filter((o) => o.status === PurchaseOrderStatus.Completed)
-      .forEach((o) => {
-        o.items.forEach((item) => {
-          pending[item.inventoryItemId] =
-            (pending[item.inventoryItemId] || 0) + item.quantity;
-        });
-      });
-    return pending;
-  }, [purchaseOrders]);
-
-  const handleEndStockChange = (itemId: string, value: string) => {
-    if (value && !/^\d*([,]\d{0,1})?$/.test(value)) {
+  // --- Guardar Inventario (Snapshot - Pestaña Inventario) ---
+  const handleSaveInventorySnapshot = () => {
+    if (inventoryItems.length === 0) {
+      alert("No hay artículos en el inventario para guardar.");
       return;
     }
-    setEndOfWeekStock((prev) => ({ ...prev, [itemId]: value }));
+
+    if (!snapshotDate) {
+      alert("Por favor, selecciona la fecha de la instantánea.");
+      return;
+    }
+
+    const recordDate = new Date(snapshotDate);
+
+    if (recordDate.toDateString() === new Date().toDateString()) {
+      recordDate.setHours(new Date().getHours());
+      recordDate.setMinutes(new Date().getMinutes());
+    }
+
+    const formattedDate = new Date(snapshotDate).toLocaleDateString("es-ES", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+    });
+
+    const recordItems: InventoryRecordItem[] = inventoryItems.map((item) => {
+      const totalStock = calculateTotalStock(item);
+      const pendingStock = stockInOrders[item.id] || 0;
+
+      return {
+        itemId: item.id,
+        name: item.name,
+        currentStock: totalStock,
+        pendingStock: pendingStock,
+        initialStock: totalStock,
+        endStock: totalStock,
+        consumption: 0,
+        stockByLocationSnapshot: item.stockByLocation || {},
+      };
+    });
+
+    const newRecord: InventoryRecord = {
+      id: crypto.randomUUID(),
+      date: recordDate.toISOString(),
+      label: `Inventario (${formattedDate})`,
+      items: recordItems,
+      type: "snapshot",
+    };
+
+    onSaveInventoryRecord(newRecord);
+
+    alert(
+      `Instantánea del inventario (${formattedDate}) guardada en el historial. El Stock Actual NO ha sido modificado.`
+    );
   };
 
   // --- Guardar Análisis de Consumo (Pestaña Análisis) ---
@@ -611,8 +683,15 @@ const InventoryComponent: React.FC<InventoryProps> = ({
     const recordItems: InventoryRecordItem[] = inventoryItems.map((item) => {
       const totalStock = calculateTotalStock(item);
       const pendingStock = stockInOrders[item.id] || 0;
-      const initialTotalStock = totalStock + pendingStock;
-      const endStock = parseDecimal(endOfWeekStock[item.id] || "0");
+
+      // Lógica avanzada de Stock Inicial: Stock Final Anterior + Pedidos pendientes completados
+      const previousEndStock = initialStockMap.get(item.id) || 0;
+      const initialTotalStock = previousEndStock + pendingStock;
+
+      // Stock Final (endStock) se toma del Stock Actual (totalStock) ingresado en Inventario.
+      const endStock = totalStock;
+
+      // Cálculo de consumo: (Stock Inicial Total) - (Stock Actual/Final Contado)
       const consumption = initialTotalStock - endStock;
 
       // Se prepara el reseteo a 0 para todos los items
@@ -627,7 +706,7 @@ const InventoryComponent: React.FC<InventoryProps> = ({
         currentStock: totalStock,
         pendingStock: pendingStock,
         initialStock: initialTotalStock,
-        endStock: endStock,
+        endStock: endStock, // Guardamos el stock actual como final del análisis
         consumption: consumption,
       };
     });
@@ -668,69 +747,23 @@ const InventoryComponent: React.FC<InventoryProps> = ({
     alert(
       `Análisis de consumo (${formattedDate}) guardado. El stock físico actual ha sido reseteado a 0. Las cantidades contadas se han guardado en el historial de análisis.`
     );
-
-    // Paso 5: Resetear los valores de entrada para la próxima semana
-    setEndOfWeekStock({});
   };
 
-  // --- Guardar Inventario (Snapshot - Pestaña Inventario) ---
-  const handleSaveInventorySnapshot = () => {
-    if (inventoryItems.length === 0) {
-      alert("No hay artículos en el inventario para guardar.");
-      return;
-    }
-
-    const currentDate = new Date();
-    const formattedDate = currentDate.toLocaleDateString("es-ES", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-    });
-
-    const recordItems: InventoryRecordItem[] = inventoryItems.map((item) => {
-      const totalStock = calculateTotalStock(item);
-      const pendingStock = stockInOrders[item.id] || 0;
-
-      return {
-        itemId: item.id,
-        name: item.name,
-        currentStock: totalStock,
-        pendingStock: pendingStock,
-        initialStock: totalStock,
-        endStock: totalStock,
-        consumption: 0,
-        stockByLocationSnapshot: item.stockByLocation || {},
-      };
-    });
-
-    const newRecord: InventoryRecord = {
-      id: crypto.randomUUID(),
-      date: currentDate.toISOString(),
-      label: `Inventario (${formattedDate})`,
-      items: recordItems,
-      type: "snapshot",
-    };
-
-    onSaveInventoryRecord(newRecord);
-
-    alert(
-      `Instantánea del inventario (${formattedDate}) guardada en el historial. El Stock Actual NO ha sido modificado.`
-    );
-  };
-
-  // --- FUNCIÓN DE RESETEO A 0 (Ya no se usa localmente) ---
+  // --- FUNCIÓN DE RESETEO A 0 (Se mantiene la referencia a la prop) ---
   const handleResetInventory = handleResetInventoryStocks;
 
   // ---- HANDLER PARA BORRADO COMPLETO DEL HISTORIAL (Delegado a App.tsx) ----
   const handleDeleteAllHistory = () => {
-    if (validInventoryHistory.length === 0) {
-      alert("El historial ya está vacío.");
-      return;
+    if (
+      window.confirm(
+        "¿Seguro que quieres borrar el historial completo de análisis e inventarios? ESTA ACCIÓN ES IRREVERSIBLE."
+      )
+    ) {
+      onDeleteAllInventoryRecords();
     }
-    onDeleteAllInventoryRecords();
   };
 
-  // ---- RENDERIZADO DE DETALLES DEL HISTORIAL ----
+  // ---- RENDERIZADO DE DETALLES DEL HISTORIAL (Corregido) ----
   const closeRecordDetailModal = () => {
     setViewingRecord(null);
   };
@@ -765,6 +798,10 @@ const InventoryComponent: React.FC<InventoryProps> = ({
               <th className="px-2 py-3 text-left text-xs font-medium text-gray-300 uppercase">
                 Artículo
               </th>
+              {/* NUEVA COLUMNA: Pedidos en Detalle de Análisis */}
+              <th className="px-2 py-3 text-right text-xs font-medium text-gray-300 uppercase">
+                Pedidos
+              </th>
               <th className="px-2 py-3 text-right text-xs font-medium text-gray-300 uppercase">
                 Stock Inicial
               </th>
@@ -781,6 +818,12 @@ const InventoryComponent: React.FC<InventoryProps> = ({
               <tr key={item.itemId || itemIndex}>
                 <td className="px-2 py-2 whitespace-nowrap text-sm font-medium text-white">
                   {item.name}
+                </td>
+                {/* VALOR: Pedidos */}
+                <td className="px-2 py-2 whitespace-nowrap text-sm text-right text-yellow-400">
+                  {item.pendingStock !== undefined
+                    ? item.pendingStock.toFixed(1).replace(".", ",")
+                    : "0.0"}
                 </td>
                 <td className="px-2 py-2 whitespace-nowrap text-sm text-right text-blue-400">
                   {item.initialStock !== undefined
@@ -810,57 +853,101 @@ const InventoryComponent: React.FC<InventoryProps> = ({
       );
     };
 
-    const renderSnapshotTable = () => (
-      <div className="overflow-x-auto">
-        {/* Usamos table-fixed y w-full para forzar el ajuste al ancho del modal. */}
-        <table className="divide-y divide-gray-700 w-full table-fixed">
-          <thead className="bg-gray-700/50">
-            <tr>
-              {/* Forzamos ancho para Articulo */}
-              <th className="px-2 py-3 text-left text-xs font-medium text-gray-300 uppercase w-[150px]">
-                Artículo
-              </th>
-              {INVENTORY_LOCATIONS.map((loc) => (
+    const renderSnapshotTable = () => {
+      // Calcular total para cada item
+      const itemsWithTotals = (viewingRecord!.items as InventoryRecordItem[])
+        .map((item) => {
+          // Calcular el total
+          const stockValues = Object.values(
+            item.stockByLocationSnapshot || {}
+          ) as number[];
+          const total = stockValues.reduce(
+            (sum, val) => sum + (Number(val) || 0),
+            0
+          );
+          return { ...item, calculatedTotal: total };
+        })
+        // Filtrar aquellos donde el Stock Inicial/Actual (calculatedTotal) sea mayor que 0
+        .filter((item) => item.calculatedTotal > 0.001);
+
+      if (itemsWithTotals.length === 0) {
+        return (
+          <div className="text-center py-5 text-slate-500">
+            <p>No se registraron artículos en stock en este inventario.</p>
+          </div>
+        );
+      }
+
+      return (
+        <div className="overflow-x-auto">
+          <table className="divide-y divide-gray-700 w-full table-fixed">
+            <thead className="bg-gray-700/50">
+              <tr>
+                <th className="px-2 py-3 text-left text-xs font-medium text-gray-300 uppercase w-[150px]">
+                  Artículo
+                </th>
+                {INVENTORY_LOCATIONS.map((loc) => (
+                  <th
+                    key={loc}
+                    className="px-2 py-3 text-right text-xs font-medium text-gray-300 uppercase w-[70px] whitespace-nowrap overflow-hidden text-ellipsis"
+                    style={{ minWidth: "70px", maxWidth: "70px" }}
+                  >
+                    {loc.length > 8 ? loc.substring(0, 6) + "..." : loc}
+                  </th>
+                ))}
+                {/* CÓDIGO AÑADIDO: Columna Total */}
                 <th
-                  key={loc}
-                  // Forzamos un ancho para que todas las columnas quepan
-                  className="px-2 py-3 text-right text-xs font-medium text-gray-300 uppercase w-[70px] whitespace-nowrap overflow-hidden text-ellipsis"
+                  className="px-2 py-3 text-right text-xs font-medium text-gray-300 uppercase w-[70px] whitespace-nowrap"
                   style={{ minWidth: "70px", maxWidth: "70px" }}
                 >
-                  {/* Truncar el nombre de la ubicación si es demasiado largo */}
-                  {loc.length > 8 ? loc.substring(0, 6) + "..." : loc}
+                  Total
                 </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="bg-gray-800 divide-y divide-gray-700">
-            {viewingRecord.items.map((item, itemIndex) => (
-              <tr
-                key={item.itemId || itemIndex}
-                className="hover:bg-gray-700/50"
-              >
-                {/* Forzamos ancho para el nombre del artículo */}
-                <td className="px-2 py-2 whitespace-nowrap text-sm font-medium text-white w-[150px]">
-                  {item.name}
-                </td>
-                {INVENTORY_LOCATIONS.map((loc) => (
-                  <td
-                    key={loc}
-                    className="px-2 py-2 whitespace-nowrap text-sm text-right text-white w-[70px] overflow-hidden text-ellipsis"
-                  >
-                    {item.stockByLocationSnapshot?.[loc] !== undefined
-                      ? item.stockByLocationSnapshot[loc]
-                          .toFixed(1)
-                          .replace(".", ",")
-                      : "0.0"}
-                  </td>
-                ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    );
+            </thead>
+            <tbody className="bg-gray-800 divide-y divide-gray-700">
+              {itemsWithTotals.map((item, itemIndex) => {
+                const calculatedTotal = item.calculatedTotal || 0;
+                return (
+                  <tr
+                    key={item.itemId || itemIndex}
+                    className="hover:bg-gray-700/50"
+                  >
+                    <td className="px-2 py-2 whitespace-nowrap text-sm font-medium text-white w-[150px]">
+                      {item.name}
+                    </td>
+                    {INVENTORY_LOCATIONS.map((loc) => {
+                      const stockValue =
+                        item.stockByLocationSnapshot?.[loc] || 0;
+                      return (
+                        <td
+                          key={loc}
+                          // 💥 COLOR CONDICIONAL: Verde si > 0, blanco si = 0
+                          className={`px-2 py-2 whitespace-nowrap text-sm text-right w-[70px] overflow-hidden text-ellipsis ${
+                            stockValue > 0.001 ? "text-green-400" : "text-white"
+                          }`}
+                        >
+                          {stockValue.toFixed(1).replace(".", ",")}
+                        </td>
+                      );
+                    })}
+                    {/* 💥 TAMAÑO Y COLOR CONDICIONAL DEL TOTAL */}
+                    <td
+                      className={`px-2 py-2 whitespace-nowrap text-lg text-right font-bold w-[70px] overflow-hidden text-ellipsis ${
+                        calculatedTotal > 0.001
+                          ? "text-green-400"
+                          : "text-slate-400"
+                      }`}
+                    >
+                      {calculatedTotal.toFixed(1).replace(".", ",")}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      );
+    };
 
     return (
       <Modal
@@ -868,15 +955,13 @@ const InventoryComponent: React.FC<InventoryProps> = ({
         onClose={closeRecordDetailModal}
         onSave={closeRecordDetailModal}
         hideSaveButton={true}
-        // 💥 CORRECCIÓN FINAL: Usamos el máximo ancho permitido (7xl) para el modal
         size="max-w-7xl"
       >
         <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2">
           <p className="text-sm text-slate-400 mb-4">
-            Registrado el {/* USANDO formatUTCToLocal */}
+            Registrado el
             {formatUTCToLocal(viewingRecord.date)}.
           </p>
-          {/* El div superior de la tabla ahora tiene el scroll horizontal, pero gracias al max-w-7xl debería verse casi siempre completo. */}
           {isAnalysis ? renderAnalysisTable() : renderSnapshotTable()}
         </div>
       </Modal>
@@ -901,13 +986,29 @@ const InventoryComponent: React.FC<InventoryProps> = ({
         onChange={(e) => handleInventoryChange("name", e.target.value)}
         className="bg-gray-700 text-white rounded p-2 w-full"
       />
-      <input
-        type="text"
-        placeholder="Categoría"
+      <select
         value={currentInventoryItem.category || ""}
         onChange={(e) => handleInventoryChange("category", e.target.value)}
         className="bg-gray-700 text-white rounded p-2 w-full"
-      />
+      >
+        <option value="" disabled>
+          Seleccionar Categoría
+        </option>
+        {CATEGORY_ORDER.map((category) => (
+          <option key={category} value={category}>
+            {category}
+          </option>
+        ))}
+        {currentInventoryItem.category &&
+          !CATEGORY_ORDER.includes(currentInventoryItem.category) && (
+            <option
+              key={currentInventoryItem.category}
+              value={currentInventoryItem.category}
+            >
+              {currentInventoryItem.category} (Custom)
+            </option>
+          )}
+      </select>
     </div>
   );
 
@@ -1072,26 +1173,6 @@ const InventoryComponent: React.FC<InventoryProps> = ({
     );
   };
 
-  const renderDriveModal = () => (
-    <div className="space-y-3">
-      <p className="text-gray-300">
-        Seleccione el archivo de Google Sheets para sincronizar el stock.
-      </p>
-      <div className="space-y-2">
-        {mockDriveFiles.map((file) => (
-          <button
-            key={file.id}
-            onClick={() => handleFileSelect(file)}
-            className="w-full text-left p-3 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors flex items-center gap-3"
-          >
-            <GoogleDriveIcon />
-            {file.name}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-
   return (
     <div className="p-4 animate-fade-in">
       <div className="flex justify-between items-center mb-6">
@@ -1143,38 +1224,31 @@ const InventoryComponent: React.FC<InventoryProps> = ({
             </div>
 
             <div className="flex justify-end items-center gap-2 flex-wrap w-full md:w-auto">
-              {/* BOTÓN RESET STOCK ELIMINADO */}
+              {/* BOTÓN: Resetear Stock Físico (Pestaña Inventario) */}
+              <button
+                onClick={handleResetInventory}
+                className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2 transition duration-300"
+              >
+                <RefreshIcon />
+                <span className="hidden sm:inline">Resetear Inventario</span>
+              </button>
 
-              {/* --- Drive Integration UI --- */}
-              {!connectedFile ? (
-                <button
-                  onClick={() => setDriveModalOpen(true)}
-                  className="bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2 transition duration-300"
-                >
-                  <GoogleDriveIcon />{" "}
-                  <span className="hidden sm:inline">Conectar Drive</span>
-                </button>
-              ) : (
-                <div className="flex items-center gap-3 bg-gray-800 p-1 rounded-lg">
-                  <span className="text-green-400 text-sm px-2">
-                    Conectado:{" "}
-                    <span className="font-semibold">{connectedFile.name}</span>
-                  </span>
-                  <button
-                    onClick={handleSync}
-                    disabled={isSyncing}
-                    className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-1 px-3 rounded text-sm flex items-center gap-2 transition duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {isSyncing ? "..." : "Sincronizar"}
-                  </button>
-                  <button
-                    onClick={() => setConnectedFile(null)}
-                    className="bg-red-600 hover:bg-red-700 text-white py-1 px-2 rounded text-sm font-bold"
-                  >
-                    X
-                  </button>
-                </div>
-              )}
+              {/* Selector de fecha para el Snapshot */}
+              <label
+                htmlFor="snapshotDate"
+                className="text-sm font-medium text-gray-300 hidden md:inline"
+              >
+                Fecha:
+              </label>
+              <input
+                id="snapshotDate"
+                type="date"
+                value={snapshotDate}
+                onChange={(e) => setSnapshotDate(e.target.value)}
+                className="bg-gray-700 text-white rounded p-2 w-40 border border-gray-600"
+              />
+              {/* FIN NUEVO */}
+
               <button
                 onClick={handleSaveInventorySnapshot}
                 className="bg-violet-600 hover:bg-violet-700 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2 transition duration-300"
@@ -1208,41 +1282,46 @@ const InventoryComponent: React.FC<InventoryProps> = ({
                   key={category}
                   title={category}
                   itemCount={items.length}
+                  initialOpen={true} // ABRIR POR DEFECTO EN INVENTARIO
                 >
                   <div className="overflow-x-auto">
                     <table className="min-w-full">
                       <thead>
                         <tr>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase sticky left-0 bg-slate-800 z-10">
-                            Nombre
+                          <th className="px-2 py-1 text-left text-xs font-medium text-gray-300 uppercase sticky left-0 bg-slate-800 z-10 w-[180px]">
+                            NOMBRE
                           </th>
                           {INVENTORY_LOCATIONS.map((loc) => (
                             <th
-                              className="px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase"
+                              className="px-2 py-1 text-center text-[10px] font-medium text-gray-300 uppercase w-[70px] whitespace-nowrap overflow-hidden text-ellipsis"
                               key={loc}
                             >
-                              {loc}
+                              {loc.length > 8
+                                ? loc.substring(0, 7).toUpperCase()
+                                : loc.toUpperCase()}
                             </th>
                           ))}
-                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-300 uppercase">
-                            Total
+                          <th className="px-2 py-1 text-center text-xs font-medium text-gray-300 uppercase w-20">
+                            TOTAL
                           </th>
-                          <th className="px-4 py-2 text-right text-xs font-medium text-gray-300 uppercase">
-                            Acciones
+                          <th className="px-2 py-1 text-right text-xs font-medium text-gray-300 uppercase w-20">
+                            ACCIONES
                           </th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-700/50">
                         {items.map((item) => (
                           <tr key={item.id} className="hover:bg-gray-700/50">
-                            <td className="px-4 py-2 whitespace-nowrap text-sm font-medium text-white sticky left-0 bg-slate-800 z-10">
+                            {/* Columna Nombre */}
+                            <td className="px-2 py-1 whitespace-nowrap text-sm font-medium text-white sticky left-0 bg-slate-800 z-10 w-[180px]">
                               {item.name}
                             </td>
                             {INVENTORY_LOCATIONS.map((loc) => (
                               <td
                                 key={loc}
-                                className="px-2 py-1 whitespace-nowrap"
+                                className="px-2 py-1 whitespace-nowrap w-[70px]"
                               >
+                                {/* Input de stock comprimido */}
                                 <input
                                   type="text"
                                   value={
@@ -1263,20 +1342,20 @@ const InventoryComponent: React.FC<InventoryProps> = ({
                                     )
                                   }
                                   onBlur={() => handleStockInputBlur(item, loc)}
-                                  className="bg-slate-700 text-white rounded p-1 w-20 text-center border border-slate-600"
+                                  className="bg-slate-700 text-white rounded p-0.5 w-14 text-center text-sm border border-slate-600"
                                   placeholder="0"
                                 />
                               </td>
                             ))}
-                            <td className="px-4 py-2 whitespace-nowrap text-2xl text-green-400 font-bold">
+                            <td className="px-4 py-2 whitespace-nowrap text-lg text-green-400 font-bold w-20">
                               {calculateTotalStock(item)
                                 .toFixed(1)
                                 .replace(".", ",")}
                             </td>
-                            <td className="px-4 py-2 whitespace-nowrap text-right text-sm">
+                            <td className="px-4 py-2 whitespace-nowrap text-right text-sm w-20">
                               <button
                                 onClick={() => openInventoryModal(item)}
-                                className="text-indigo-400 mr-4"
+                                className="text-indigo-400 mr-1"
                               >
                                 <PencilIcon />
                               </button>
@@ -1309,7 +1388,7 @@ const InventoryComponent: React.FC<InventoryProps> = ({
               onClick={() => openOrderModal()}
               className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2 transition duration-300 ml-auto"
             >
-              PlusIcon / Nuevo Pedido
+              <PlusIcon />{" "}
               <span className="hidden sm:inline">Nuevo Pedido</span>
             </button>
           </div>
@@ -1325,6 +1404,9 @@ const InventoryComponent: React.FC<InventoryProps> = ({
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase">
                     Estado
+                  </th>
+                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-300 uppercase">
+                    Completado
                   </th>
                   <th className="px-6 py-3 text-right text-xs font-medium text-gray-300 uppercase">
                     Acciones
@@ -1343,22 +1425,27 @@ const InventoryComponent: React.FC<InventoryProps> = ({
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
                       <span
                         className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                          order.status === PurchaseOrderStatus.Completed
+                          order.status === PurchaseOrderStatus.Completed ||
+                          order.status === PurchaseOrderStatus.Archived
                             ? "bg-green-500/20 text-green-400"
-                            : order.status === PurchaseOrderStatus.Pending
-                            ? "bg-yellow-500/20 text-yellow-400"
-                            : "bg-red-500/20 text-red-400"
+                            : "bg-yellow-500/20 text-yellow-400"
                         }`}
                       >
                         {order.status}
                       </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-center text-sm">
                       {order.status === PurchaseOrderStatus.Pending && (
                         <button
                           onClick={() => handleReceiveOrder(order)}
-                          className="ml-4 px-2 py-1 bg-green-600/30 text-green-400 hover:bg-green-600 hover:text-white rounded text-xs font-bold transition duration-300"
+                          className="px-2 py-1 bg-green-600/30 text-green-400 hover:bg-green-600 hover:text-white rounded text-xs font-bold transition duration-300"
                         >
                           Recibir
                         </button>
+                      )}
+                      {(order.status === PurchaseOrderStatus.Completed ||
+                        order.status === PurchaseOrderStatus.Archived) && (
+                        <span className="text-green-400 font-bold">OK</span>
                       )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
@@ -1376,7 +1463,7 @@ const InventoryComponent: React.FC<InventoryProps> = ({
                         }
                         className="text-red-500"
                       >
-                        TrashIcon
+                        <TrashIcon />
                       </button>
                     </td>
                   </tr>
@@ -1389,13 +1476,12 @@ const InventoryComponent: React.FC<InventoryProps> = ({
 
       {activeTab === "analysis" && (
         <div className="bg-gray-800 shadow-xl rounded-lg overflow-x-auto p-4">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4">
+          <div className="flex flex-col sm:flex-row justify-between items-start md:items-center mb-4 gap-4">
             <h2 className="text-xl font-bold text-white">
               Análisis de Consumo Semanal
             </h2>
 
             <div className="flex items-center gap-2 flex-wrap">
-              {/* BOTÓN RESET STOCK ELIMINADO DE AQUÍ (Se resetea automáticamente al guardar) */}
               <label
                 htmlFor="analysisDate"
                 className="text-sm font-medium text-gray-300"
@@ -1417,74 +1503,90 @@ const InventoryComponent: React.FC<InventoryProps> = ({
               </button>
             </div>
           </div>
-          <table className="min-w-full divide-y divide-gray-700">
-            <thead className="bg-gray-700/50">
-              <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">
-                  Artículo
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">
-                  Stock Actual
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">
-                  En Pedidos
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">
-                  Stock Inicial Total
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">
-                  Stock Fin de Semana
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">
-                  Consumo
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-gray-800 divide-y divide-gray-700">
-              {inventoryItems.map((item) => {
-                const totalStock = calculateTotalStock(item);
-                const pendingStock = stockInOrders[item.id] || 0;
-                const initialTotalStock = totalStock + pendingStock;
-                const endStock = parseDecimal(endOfWeekStock[item.id] || "0");
-                const consumption = initialTotalStock - endStock;
+          <div className="space-y-4">
+            {" "}
+            {/* Contenedor para acordeones */}
+            {analysisGroupedItems.map(
+              ({ category, items, categoryTotalRelevantStock }) => (
+                <CategoryAccordion
+                  key={category}
+                  title={category}
+                  itemCount={items.length}
+                  // ABRIR SÓLO SI HAY STOCK POSITIVO O PEDIDOS PENDIENTES EN LA CATEGORÍA
+                  initialOpen={categoryTotalRelevantStock > 0.001}
+                >
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-700">
+                      <thead className="bg-gray-700/50">
+                        <tr>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">
+                            Artículo
+                          </th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">
+                            Stock Actual
+                          </th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">
+                            En Pedidos
+                          </th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">
+                            Stock Semana Anterior
+                          </th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">
+                            Stock Inicial Total
+                          </th>
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">
+                            Consumo
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-gray-800 divide-y divide-gray-700">
+                        {items.map((item) => {
+                          // Cálculos por ítem (repetidos aquí porque items es el output de analysisGroupedItems)
+                          const totalStock = calculateTotalStock(item);
+                          const pendingStock = stockInOrders[item.id] || 0;
+                          const previousEndStock =
+                            initialStockMap.get(item.id) || 0;
+                          const initialTotalStock =
+                            previousEndStock + pendingStock;
+                          const endStock = totalStock;
+                          const consumption = initialTotalStock - endStock;
 
-                return (
-                  <tr key={item.id} className="hover:bg-gray-700/50">
-                    <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-white">
-                      {item.name}
-                    </td>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-300">
-                      {totalStock.toFixed(1).replace(".", ",")}
-                    </td>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm text-yellow-400">
-                      {pendingStock.toFixed(1).replace(".", ",")}
-                    </td>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm text-blue-400 font-bold">
-                      {initialTotalStock.toFixed(1).replace(".", ",")}
-                    </td>
-                    <td className="px-4 py-4 whitespace-nowrap text-sm">
-                      <input
-                        type="text"
-                        value={endOfWeekStock[item.id] || ""}
-                        onChange={(e) =>
-                          handleEndStockChange(item.id, e.target.value)
-                        }
-                        className="bg-gray-700 text-white rounded p-2 w-28 border border-gray-600"
-                        placeholder="0"
-                      />
-                    </td>
-                    <td
-                      className={`px-4 py-4 whitespace-nowrap text-sm font-bold ${
-                        consumption >= 0 ? "text-green-400" : "text-red-400"
-                      }`}
-                    >
-                      {consumption.toFixed(1).replace(".", ",")}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                          return (
+                            <tr key={item.id} className="hover:bg-gray-700/50">
+                              <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-white">
+                                {item.name}
+                              </td>
+                              <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-300">
+                                {totalStock.toFixed(1).replace(".", ",")}
+                              </td>
+                              <td className="px-4 py-4 whitespace-nowrap text-sm text-yellow-400">
+                                {pendingStock.toFixed(1).replace(".", ",")}
+                              </td>
+                              <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-300">
+                                {previousEndStock.toFixed(1).replace(".", ",")}
+                              </td>
+                              <td className="px-4 py-4 whitespace-nowrap text-sm text-blue-400 font-bold">
+                                {initialTotalStock.toFixed(1).replace(".", ",")}
+                              </td>
+                              <td
+                                className={`px-4 py-4 whitespace-nowrap text-sm font-bold ${
+                                  consumption >= 0
+                                    ? "text-green-400"
+                                    : "text-red-400"
+                                }`}
+                              >
+                                {consumption.toFixed(1).replace(".", ",")}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </CategoryAccordion>
+              )
+            )}
+          </div>
         </div>
       )}
 
@@ -1498,7 +1600,7 @@ const InventoryComponent: React.FC<InventoryProps> = ({
               onClick={handleDeleteAllHistory}
               className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2 transition duration-300"
             >
-              Borrar Historial Completo
+              <TrashIcon /> Borrar Historial Completo
             </button>
           </div>
 
@@ -1522,7 +1624,6 @@ const InventoryComponent: React.FC<InventoryProps> = ({
                   <div>
                     <p className="font-semibold text-white">{record.label}</p>
                     <p className="text-sm text-slate-400">
-                      {/* APLICANDO formatUTCToLocal para mostrar la hora local */}
                       {formatUTCToLocal(record.date)}
                     </p>
                   </div>
@@ -1573,16 +1674,6 @@ const InventoryComponent: React.FC<InventoryProps> = ({
 
       {/* Modal para mostrar los detalles del historial */}
       {viewingRecord && renderInventoryRecordDetailModal()}
-
-      {isDriveModalOpen && (
-        <Modal
-          title="Conectar con Google Drive"
-          onClose={() => setDriveModalOpen(false)}
-          onSave={() => {}}
-        >
-          {renderDriveModal()}
-        </Modal>
-      )}
     </div>
   );
 };

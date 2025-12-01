@@ -2,6 +2,7 @@
 import { Handler } from "@netlify/functions";
 import { connectToDatabase } from "./utils/db";
 import { PurchaseOrderModel } from "./models";
+import mongoose from "mongoose";
 
 const handler: Handler = async (event, context) => {
   context.callbackWaitsForEmptyEventLoop = false;
@@ -50,14 +51,7 @@ const handler: Handler = async (event, context) => {
 
       // 1. Mapear 'id' del frontend a '_id' de Mongoose.
       if (!orderToSave.id) {
-        console.error("Missing order ID in POST request.");
-        return {
-          statusCode: 400,
-          headers,
-          body: JSON.stringify({
-            error: "Order ID (id) is missing in the request.",
-          }),
-        };
+        orderToSave.id = new mongoose.Types.ObjectId().toHexString(); // Fallback ID if missing
       }
 
       orderToSave._id = orderToSave.id;

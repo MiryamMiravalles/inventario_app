@@ -1270,19 +1270,31 @@ const App: React.FC = () => {
   }, [supplierExpenses, purchaseOrders]);
 
   const addOrUpdate = useCallback(
-    <T extends { id: string }>(
+    <T extends { id: string; name?: string }>( // <<-- Añado 'name' para tipado de InventoryItem
       setter: React.Dispatch<React.SetStateAction<T[]>>,
       item: T
     ) => {
       setter((prev) => {
         const index = prev.findIndex((i) => i.id === item.id);
+        let updatedList: T[];
+        const itemWithId = { ...item, id: item.id || crypto.randomUUID() };
+
         if (index > -1) {
-          const newItems = [...prev];
-          newItems[index] = item;
-          return newItems;
+          updatedList = [...prev];
+          updatedList[index] = itemWithId;
         } else {
-          return [{ ...item, id: item.id || crypto.randomUUID() }, ...prev];
+          updatedList = [itemWithId, ...prev];
         }
+
+        // 💥 LÓGICA DE ORDENACIÓN ALFABÉTICA
+        // Ordena si el tipo de elemento tiene la propiedad 'name' (como InventoryItem)
+        if ((updatedList[0] as any).name !== undefined) {
+          return updatedList.sort((a, b) =>
+            (a as any).name.localeCompare((b as any).name)
+          );
+        }
+
+        return updatedList;
       });
     },
     []
