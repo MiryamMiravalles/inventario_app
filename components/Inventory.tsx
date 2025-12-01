@@ -256,7 +256,10 @@ const InventoryComponent: React.FC<InventoryProps> = ({
     Record<string, string>
   >({});
 
-  // 💥 FECHA ELIMINADA DEL ESTADO - Ahora se genera al guardar para DEV
+  // 💥 FECHA ELIMINADA DEL ESTADO
+  const [analysisDate, setAnalysisDate] = useState("");
+  const [snapshotDate, setSnapshotDate] = useState("");
+
   const [searchTerm, setSearchTerm] = useState("");
 
   // CORRECCIÓN TS2451: El setter se llama 'setOrderSearchTerm'
@@ -653,7 +656,7 @@ const InventoryComponent: React.FC<InventoryProps> = ({
       return;
     }
 
-    // 💥 USAMOS FECHA ACTUAL DEL SISTEMA
+    // 💥 Usamos la fecha y hora actual del sistema
     const recordDate = new Date();
 
     const formattedDate = new Date().toLocaleDateString("es-ES", {
@@ -700,7 +703,7 @@ const InventoryComponent: React.FC<InventoryProps> = ({
       return;
     }
 
-    // 💥 USAMOS FECHA ACTUAL DEL SISTEMA
+    // 💥 Usamos la fecha y hora actual del sistema
     const recordDate = new Date();
 
     const recordItems: InventoryRecordItem[] = inventoryItems.map((item) => {
@@ -718,12 +721,12 @@ const InventoryComponent: React.FC<InventoryProps> = ({
       const consumption = initialTotalStock - endStock;
 
       // Se prepara el reseteo a 0 para todos los items
-      // La variable updatesForReset debe ser declarada en el scope de esta función
-      const updatesForReset: { name: string; stock: number }[] = [];
-      updatesForReset.push({
-        name: item.name,
-        stock: 0, // Forzar el stock activo a 0
-      });
+      // Se corrige la declaración de updatesForReset
+      const updatesForReset: { name: string; stock: number }[] =
+        inventoryItems.map((item) => ({
+          name: item.name,
+          stock: 0,
+        }));
 
       return {
         itemId: item.id,
@@ -737,13 +740,11 @@ const InventoryComponent: React.FC<InventoryProps> = ({
     });
 
     // Paso 2: Ejecutar el reseteo a 0 (Esto debe ejecutarse SIEMPRE)
-    // Se extrae la declaración de updatesForReset al inicio del bloque de la función
-    const updatesForReset: { name: string; stock: number }[] = recordItems.map(
-      (item) => ({
+    const updatesForReset: { name: string; stock: number }[] =
+      inventoryItems.map((item) => ({
         name: item.name,
         stock: 0,
-      })
-    );
+      }));
 
     if (updatesForReset.length > 0) {
       onBulkUpdateInventoryItems(updatesForReset, "set");
@@ -1568,8 +1569,8 @@ const InventoryComponent: React.FC<InventoryProps> = ({
                   key={category}
                   title={category}
                   itemCount={items.length}
-                  // ABRIR SÓLO SI HAY STOCK POSITIVO O PEDIDOS PENDIENTES EN LA CATEGORÍA
-                  initialOpen={categoryTotalRelevantStock > 0.001}
+                  // 💥 CORRECCIÓN: Abrir por defecto en Análisis de Consumo
+                  initialOpen={true}
                 >
                   <div className="overflow-x-auto">
                     <table className="min-w-full divide-y divide-gray-700">
