@@ -44,7 +44,15 @@ export const api = {
         headers,
         body: JSON.stringify(data),
       }).then(handleResponse),
-    bulkUpdate: (updates: any[]) =>
+    // CORRECCIÓN: Definición de bulkUpdate con el tipo de datos esperado (incluye id y mode)
+    bulkUpdate: (
+      updates: {
+        id?: string;
+        name: string;
+        stock: number;
+        mode: "set" | "add";
+      }[]
+    ) =>
       fetch(`${API_BASE}/inventory`, {
         method: "PUT",
         headers,
