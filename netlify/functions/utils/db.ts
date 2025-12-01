@@ -1,43 +1,47 @@
-// netlify/functions/utils/db.ts
 import mongoose from "mongoose";
 
-const MONGODB_URI = process.env.MONGO_URI;
+// Variable de estado para reutilizar la conexión
+let cachedDb: any = null;
 
-if (!MONGODB_URI) {
-  throw new Error(
-    "Please define the MONGO_URI environment variable inside .env"
-  );
-}
+// La URI de la base de datos debería estar configurada en Netlify
+const MONGO_URI = process.env.MONGO_URI;
 
-let cached = (globalThis as any).mongoose;
-
-if (!cached) {
-  cached = (globalThis as any).mongoose = { conn: null, promise: null };
-}
-
-export async function connectToDatabase() {
-  if (cached.conn) {
-    // 💡 Verificación de estado de conexión
-    if (cached.conn.readyState === 1) {
-      return cached.conn;
-    }
-
-    cached.conn = null;
-    cached.promise = null;
-    console.log("Cached connection not ready, forcing re-initialization.");
+/**
+ * Conecta a la base de datos o reutiliza la conexión en caché.
+ */
+// Exportamos la función como default para que coincida con: import connectToDatabase from './utils/db';
+const connectToDatabase = async () => {
+  if (!MONGO_URI) {
+    throw new Error("MONGO_URI environment variable not set.");
   }
 
-  if (!cached.promise) {
-    const opts = {
-      bufferCommands: false,
-      serverSelectionTimeoutMS: 30000,
-      connectTimeoutMS: 30000,
-    };
+  // 1. Reutilizar la conexión si ya está en caché
+  if (cachedDb) {
+    console.log("Using existing database connection.");
+    return cachedDb;
+  }
 
-    cached.promise = mongoose.connect(MONGODB_URI!, opts).then((mongoose) => {
-      return mongoose;
+  // 2. Conectar a la BD si no está en caché
+  console.log("Connecting to database...");
+  try {
+    const db = await mongoose.connect(MONGO_URI, {
+      // Estas opciones son para evitar advertencias de deprecación de Mongoose,
+      // pero pueden ser opcionales dependiendo de la versión.
+      // useNewUrlParser: true,
+      // useUnifiedTopology: true,
+      serverSelectionTimeoutMS: 5000,
     });
+
+    // 3. Almacenar la conexión en caché
+    cachedDb = db;
+    console.log("Successfully connected and cached database.");
+    return cachedDb;
+  } catch (error) {
+    console.error("Error connecting to database:", error);
+    // Relanzar el error para que la función de Netlify falle.
+    throw new Error("Database connection failed.");
   }
-  cached.conn = await cached.promise;
-  return cached.conn;
-}
+};
+
+// 🛑 EXPORTACIÓN CLAVE: Exportación por defecto
+export default connectToDatabase;

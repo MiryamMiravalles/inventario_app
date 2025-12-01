@@ -1,5 +1,5 @@
 import { Handler } from "@netlify/functions";
-import { connectToDatabase } from "./utils/db";
+import connectToDatabase from "./utils/db";
 import { IncomeSourceModel } from "./models";
 
 export const handler: Handler = async (event, context) => {
