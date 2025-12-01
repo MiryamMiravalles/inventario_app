@@ -256,15 +256,7 @@ const InventoryComponent: React.FC<InventoryProps> = ({
     Record<string, string>
   >({});
 
-  const [analysisDate, setAnalysisDate] = useState(
-    new Date().toISOString().split("T")[0]
-  );
-
-  // ESTADO: Fecha para la instantánea de inventario
-  const [snapshotDate, setSnapshotDate] = useState(
-    new Date().toISOString().split("T")[0]
-  );
-
+  // 💥 FECHA ELIMINADA DEL ESTADO - Ahora se genera al guardar para DEV
   const [searchTerm, setSearchTerm] = useState("");
 
   // CORRECCIÓN TS2451: El setter se llama 'setOrderSearchTerm'
@@ -508,7 +500,19 @@ const InventoryComponent: React.FC<InventoryProps> = ({
   };
 
   const handleSaveOrder = () => {
-    // La validación de si se puede guardar se realiza en el botón dentro de renderOrderForm
+    // 💥 CORRECCIÓN: Validamos *antes* de llamar al onSave para evitar guardar pedidos vacíos
+    const hasItemsWithQuantity = currentPurchaseOrder.items.some(
+      (item) => item.quantity > 0.001
+    );
+    const hasSupplierName = currentPurchaseOrder.supplierName.trim() !== "";
+
+    if (!hasItemsWithQuantity || !hasSupplierName) {
+      alert(
+        "Por favor, introduce el proveedor y al menos un artículo con cantidad positiva."
+      );
+      return;
+    }
+
     onSavePurchaseOrder({
       id: (currentPurchaseOrder as PurchaseOrder).id || crypto.randomUUID(),
       ...currentPurchaseOrder,
@@ -542,6 +546,10 @@ const InventoryComponent: React.FC<InventoryProps> = ({
       status: PurchaseOrderStatus.Completed,
       deliveryDate: new Date().toISOString().split("T")[0],
     } as PurchaseOrder);
+
+    alert(
+      `Pedido de ${order.supplierName} marcado como recibido y completado. Las cantidades AHORA se reflejan en la columna \"En Pedidos\" de la pestaña Análisis. No se realizó ajuste automático al stock.`
+    );
   };
 
   const handleOrderChange = (
@@ -645,19 +653,10 @@ const InventoryComponent: React.FC<InventoryProps> = ({
       return;
     }
 
-    if (!snapshotDate) {
-      alert("Por favor, selecciona la fecha de la instantánea.");
-      return;
-    }
+    // 💥 USAMOS FECHA ACTUAL DEL SISTEMA
+    const recordDate = new Date();
 
-    const recordDate = new Date(snapshotDate);
-
-    if (recordDate.toDateString() === new Date().toDateString()) {
-      recordDate.setHours(new Date().getHours());
-      recordDate.setMinutes(new Date().getMinutes());
-    }
-
-    const formattedDate = new Date(snapshotDate).toLocaleDateString("es-ES", {
+    const formattedDate = new Date().toLocaleDateString("es-ES", {
       day: "2-digit",
       month: "2-digit",
       year: "numeric",
@@ -701,13 +700,8 @@ const InventoryComponent: React.FC<InventoryProps> = ({
       return;
     }
 
-    if (!analysisDate) {
-      alert("Por favor, selecciona la fecha del análisis.");
-      return;
-    }
-
-    // Paso 1: Preparar los datos del registro y la lista de reseteo
-    const updatesForReset: { name: string; stock: number }[] = [];
+    // 💥 USAMOS FECHA ACTUAL DEL SISTEMA
+    const recordDate = new Date();
 
     const recordItems: InventoryRecordItem[] = inventoryItems.map((item) => {
       const totalStock = calculateTotalStock(item);
@@ -724,6 +718,8 @@ const InventoryComponent: React.FC<InventoryProps> = ({
       const consumption = initialTotalStock - endStock;
 
       // Se prepara el reseteo a 0 para todos los items
+      // La variable updatesForReset debe ser declarada en el scope de esta función
+      const updatesForReset: { name: string; stock: number }[] = [];
       updatesForReset.push({
         name: item.name,
         stock: 0, // Forzar el stock activo a 0
@@ -741,12 +737,20 @@ const InventoryComponent: React.FC<InventoryProps> = ({
     });
 
     // Paso 2: Ejecutar el reseteo a 0 (Esto debe ejecutarse SIEMPRE)
+    // Se extrae la declaración de updatesForReset al inicio del bloque de la función
+    const updatesForReset: { name: string; stock: number }[] = recordItems.map(
+      (item) => ({
+        name: item.name,
+        stock: 0,
+      })
+    );
+
     if (updatesForReset.length > 0) {
       onBulkUpdateInventoryItems(updatesForReset, "set");
     }
 
     // Paso 3: Guardar el Análisis en el Historial
-    const formattedDate = new Date(analysisDate).toLocaleDateString("es-ES", {
+    const formattedDate = new Date().toLocaleDateString("es-ES", {
       day: "2-digit",
       month: "2-digit",
       year: "numeric",
@@ -754,8 +758,8 @@ const InventoryComponent: React.FC<InventoryProps> = ({
 
     const newRecord: InventoryRecord = {
       id: crypto.randomUUID(),
-      // Usar new Date().toISOString() para la hora actual
-      date: new Date().toISOString(),
+      // Usar la fecha ajustada
+      date: recordDate.toISOString(),
       label: `Análisis de consumo (${formattedDate})`,
       items: recordItems,
       type: "analysis",
@@ -947,9 +951,11 @@ const InventoryComponent: React.FC<InventoryProps> = ({
                       return (
                         <td
                           key={loc}
-                          // 💥 COLOR CONDICIONAL: Verde si > 0, blanco si = 0
+                          // 💥 CORRECCIÓN: Gris si 0, Verde si > 0
                           className={`px-2 py-2 whitespace-nowrap text-sm text-right w-[70px] overflow-hidden text-ellipsis ${
-                            stockValue > 0.001 ? "text-green-400" : "text-white"
+                            stockValue > 0.001
+                              ? "text-green-400"
+                              : "text-slate-400"
                           }`}
                         >
                           {stockValue.toFixed(1).replace(".", ",")}
@@ -1054,7 +1060,8 @@ const InventoryComponent: React.FC<InventoryProps> = ({
     if (!hasSupplierName) {
       disabledTitle = "Introduce el proveedor para guardar";
     } else if (!hasItemsWithQuantity) {
-      disabledTitle = "Añade al menos un artículo para guardar";
+      disabledTitle =
+        "Añade al menos un artículo con cantidad > 0 para guardar";
     }
 
     return (
@@ -1129,7 +1136,7 @@ const InventoryComponent: React.FC<InventoryProps> = ({
                     }`}
                     disabled={isAlreadyInOrder}
                   >
-                    {isAlreadyInOrder ? "Añadido" : "Añadir"}
+                    {isAlreadyInOrder ? "Añadido" : "✅ Añadir"}
                   </button>
                 </div>
               );
@@ -1215,7 +1222,7 @@ const InventoryComponent: React.FC<InventoryProps> = ({
         {/* 💥 Footer con botones controlados manualmente */}
         <div className="flex justify-end p-4 border-t border-gray-700 rounded-b-lg mt-4 bg-gray-800">
           <button
-            onClick={closeOrderModal} // <-- CORREGIDO
+            onClick={closeOrderModal}
             className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg mr-2 transition duration-300"
           >
             Cancelar
@@ -1297,6 +1304,9 @@ const InventoryComponent: React.FC<InventoryProps> = ({
                 <RefreshIcon />
                 <span className="hidden sm:inline">Resetear Inventario</span>
               </button>
+
+              {/* Selector de fecha para el Snapshot */}
+              {/* 💥 ELIMINADO EL INPUT DE FECHA Y SU LABEL */}
 
               <button
                 onClick={handleSaveInventorySnapshot}
@@ -1540,6 +1550,7 @@ const InventoryComponent: React.FC<InventoryProps> = ({
             </h2>
 
             <div className="flex items-center gap-2 flex-wrap">
+              {/* 💥 ELIMINADO: Selector de fecha de Análisis */}
               <button
                 onClick={handleSaveCurrentInventory}
                 className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2 transition duration-300"
