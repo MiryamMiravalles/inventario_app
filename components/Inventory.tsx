@@ -101,42 +101,32 @@ const CategoryAccordion: React.FC<CategoryAccordionProps> = ({
 
   return (
     <div className="bg-slate-800 rounded-lg shadow-lg">
-           {" "}
       <button
         onClick={() => setIsOpen(!isOpen)}
         className="w-full flex justify-between items-center p-4 text-left text-lg font-bold text-slate-200 hover:bg-slate-700/50 rounded-lg transition-colors"
         aria-expanded={isOpen}
       >
-               {" "}
         <div className="flex items-center gap-3">
-                    <span>{title}</span>         {" "}
+          <span>{title}</span>
           <span className="text-xs font-normal bg-slate-700 text-slate-300 px-2 py-0.5 rounded-full">
-                        {itemCount} items          {" "}
+            {itemCount} items
           </span>
-                 {" "}
         </div>
-               {" "}
         <ChevronDownIcon
           className={`h-6 w-6 transition-transform duration-300 ${
             isOpen ? "rotate-180" : ""
           }`}
         />
-             {" "}
       </button>
-           {" "}
       <div
         className={`grid transition-all duration-500 ease-in-out ${
           isOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
         }`}
       >
-               {" "}
         <div className="overflow-hidden">
-                   {" "}
-          <div className="p-2 border-t border-slate-700">{children}</div>       {" "}
+          <div className="p-2 border-t border-slate-700">{children}</div>
         </div>
-             {" "}
       </div>
-         {" "}
     </div>
   );
 };
@@ -151,94 +141,70 @@ const WeeklyConsumptionAnalysis: React.FC<WeeklyConsumptionAnalysisProps> = ({
   formatUTCToLocal,
 }) => {
   const lastRecord = useMemo(() => {
-    if (!inventoryHistory || inventoryHistory.length === 0) return null;
+    // 🛑 CORRECCIÓN PRINCIPAL: Asegurar que es un array antes de usar .length y .find
+    if (!Array.isArray(inventoryHistory) || inventoryHistory.length === 0)
+      return null;
 
-    return (inventoryHistory as InventoryRecord[]).find(
-      (r) => r.type === "analysis"
-    );
+    return inventoryHistory.find((r) => r.type === "analysis");
   }, [inventoryHistory]);
 
   if (!lastRecord) {
     return (
       <div className="text-center py-10 text-slate-500 bg-slate-900/50 rounded-lg">
-               {" "}
         <p>
-                    Se necesita al menos **un registro de análisis** para
-          mostrar el           análisis de consumo.        {" "}
+          Se necesita al menos **un registro de análisis** para mostrar el
+          análisis de consumo.
         </p>
-               {" "}
         <p className="text-sm mt-2">
-                    Guarda el inventario actual en la pestaña de 'Análisis'.    
-             {" "}
+          Guarda el inventario actual en la pestaña de 'Análisis'.
         </p>
-             {" "}
       </div>
     );
   }
 
-  const consumptionItems = lastRecord.items.filter(
-    (item) => item.consumption > 0.001
-  );
+  // Reforzamos aquí también por si acaso, aunque ya debería ser seguro si lastRecord existe.
+  const consumptionItems = Array.isArray(lastRecord.items)
+    ? lastRecord.items.filter((item) => item.consumption > 0.001)
+    : [];
 
   return (
     <div className="bg-gray-800 shadow-xl rounded-lg overflow-x-auto p-4 mb-6">
-           {" "}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-3">
-               {" "}
         <h2 className="text-xl font-bold text-white">
-                    Consumo de la Última Semana (Finalizado en:          {" "}
-          {formatUTCToLocal(lastRecord.date)})        {" "}
+          Consumo de la Última Semana (Finalizado en:
+          {formatUTCToLocal(lastRecord.date)})
         </h2>
-             {" "}
       </div>
-           {" "}
       {consumptionItems.length > 0 ? (
         <table className="min-w-full divide-y divide-gray-700">
-                   {" "}
           <thead className="bg-gray-700/50">
-                       {" "}
             <tr>
-                           {" "}
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">
-                                Artículo              {" "}
+                Artículo
               </th>
-                           {" "}
               <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">
-                                Cantidad Gastada              {" "}
+                Cantidad Gastada
               </th>
-                         {" "}
             </tr>
-                     {" "}
           </thead>
-                   {" "}
           <tbody className="bg-gray-800 divide-y divide-gray-700">
-                       {" "}
             {consumptionItems.map((item) => (
               <tr key={item.itemId} className="hover:bg-gray-700/50">
-                               {" "}
                 <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-white">
-                                    {item.name}               {" "}
+                  {item.name}
                 </td>
-                               {" "}
                 <td className="px-4 py-4 whitespace-nowrap text-lg font-bold text-red-400">
-                                   {" "}
-                  {item.consumption.toFixed(1).replace(".", ",")}               {" "}
+                  {item.consumption.toFixed(1).replace(".", ",")}
                 </td>
-                             {" "}
               </tr>
             ))}
-                     {" "}
           </tbody>
-                 {" "}
         </table>
       ) : (
         <div className="text-center py-5 text-slate-500">
-                   {" "}
-          <p>No hay artículos con consumo registrado en este análisis.</p>     
-           {" "}
+          <p>No hay artículos con consumo registrado en este análisis.</p>
         </div>
       )}
-         {" "}
     </div>
   );
 };
@@ -298,7 +264,10 @@ const InventoryComponent: React.FC<InventoryProps> = ({
   };
 
   const validInventoryHistory = useMemo(() => {
-    return (Array.isArray(inventoryHistory) ? inventoryHistory : []).sort(
+    // 🛑 CORRECCIÓN SECUNDARIA: Asegurar que es un array antes de ordenar
+    if (!Array.isArray(inventoryHistory)) return [];
+
+    return inventoryHistory.sort(
       (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
     ) as InventoryRecord[];
   }, [inventoryHistory]);
@@ -329,7 +298,8 @@ const InventoryComponent: React.FC<InventoryProps> = ({
   }, [validInventoryHistory]);
 
   const initialStockMap = useMemo(() => {
-    if (!lastRecord) return new Map<string, number>();
+    if (!lastRecord || !Array.isArray(lastRecord.items))
+      return new Map<string, number>();
 
     return new Map<string, number>(
       lastRecord.items.map((item) => [
@@ -802,110 +772,84 @@ const InventoryComponent: React.FC<InventoryProps> = ({
   };
 
   const renderInventoryRecordDetailModal = () => {
-    if (!viewingRecord) return null;
+    if (!viewingRecord || !Array.isArray(viewingRecord.items)) return null;
 
     const isAnalysis = viewingRecord.type === "analysis";
 
+    // 🛑 Reforzamos la tipificación de items para las funciones de renderizado.
+    const recordItems = viewingRecord.items as InventoryRecordItem[];
+
     const renderAnalysisTable = () => {
-      const consumedItems = viewingRecord.items.filter(
+      const consumedItems = recordItems.filter(
         (item) => item.consumption > 0.001
       );
 
       if (consumedItems.length === 0) {
         return (
           <div className="text-center py-5 text-slate-500">
-                       {" "}
-            <p>No se registró consumo de artículos en este análisis.</p>       
-             {" "}
+            <p>No se registró consumo de artículos en este análisis.</p>
           </div>
         );
       }
 
       return (
         <table className="min-w-full divide-y divide-gray-700">
-                   {" "}
           <thead className="bg-gray-700/50">
-                       {" "}
             <tr>
-                           {" "}
               <th className="px-2 py-3 text-left text-xs font-medium text-gray-300 uppercase">
-                                Artículo              {" "}
+                Artículo
               </th>
-                           {" "}
               <th className="px-2 py-3 text-right text-xs font-medium text-gray-300 uppercase">
-                                Pedidos              {" "}
+                Pedidos
               </th>
-                           {" "}
               <th className="px-2 py-3 text-right text-xs font-medium text-gray-300 uppercase">
-                                Stock Inicial              {" "}
+                Stock Inicial
               </th>
-                           {" "}
               <th className="px-2 py-3 text-right text-xs font-medium text-gray-300 uppercase">
-                                Stock Final              {" "}
+                Stock Final
               </th>
-                           {" "}
               <th className="px-2 py-3 text-right text-xs font-medium text-gray-300 uppercase">
-                                Consumo              {" "}
+                Consumo
               </th>
-                         {" "}
             </tr>
-                     {" "}
           </thead>
-                   {" "}
           <tbody className="bg-gray-800 divide-y divide-gray-700">
-                       {" "}
             {consumedItems.map((item, itemIndex) => (
               <tr key={item.itemId || itemIndex}>
-                               {" "}
                 <td className="px-2 py-2 whitespace-nowrap text-sm font-medium text-white">
-                                    {item.name}               {" "}
+                  {item.name}
                 </td>
-                               {" "}
                 <td className="px-2 py-2 whitespace-nowrap text-sm text-right text-yellow-400">
-                                   {" "}
                   {item.pendingStock !== undefined
                     ? item.pendingStock.toFixed(1).replace(".", ",")
                     : "0.0"}
-                                 {" "}
                 </td>
-                               {" "}
                 <td className="px-2 py-2 whitespace-nowrap text-sm text-right text-blue-400">
-                                   {" "}
                   {item.initialStock !== undefined
                     ? item.initialStock.toFixed(1).replace(".", ",")
                     : "-"}
-                                 {" "}
                 </td>
-                               {" "}
                 <td className="px-2 py-2 whitespace-nowrap text-sm text-right text-yellow-400">
-                                   {" "}
                   {item.endStock !== undefined
                     ? item.endStock.toFixed(1).replace(".", ",")
                     : "-"}
-                                 {" "}
                 </td>
-                               {" "}
                 <td
                   className={`px-2 py-2 whitespace-nowrap text-lg text-right font-bold text-red-400`}
                 >
-                                   {" "}
                   {item.consumption !== undefined
                     ? item.consumption.toFixed(1).replace(".", ",")
                     : "-"}
-                                 {" "}
                 </td>
-                             {" "}
               </tr>
             ))}
-                     {" "}
           </tbody>
-                 {" "}
         </table>
       );
     };
 
     const renderSnapshotTable = () => {
-      const itemsWithTotals = (viewingRecord!.items as InventoryRecordItem[])
+      const itemsWithTotals = recordItems
         .map((item) => {
           const stockValues = Object.values(
             item.stockByLocationSnapshot || {}
@@ -921,51 +865,37 @@ const InventoryComponent: React.FC<InventoryProps> = ({
       if (itemsWithTotals.length === 0) {
         return (
           <div className="text-center py-5 text-slate-500">
-                       {" "}
-            <p>No se registraron artículos en stock en este inventario.</p>     
-               {" "}
+            <p>No se registraron artículos en stock en este inventario.</p>
           </div>
         );
       }
 
       return (
         <div className="overflow-x-auto">
-                   {" "}
           <table className="divide-y divide-gray-700 w-full table-fixed">
-                       {" "}
             <thead className="bg-gray-700/50">
-                           {" "}
               <tr>
-                               {" "}
                 <th className="px-2 py-3 text-left text-xs font-medium text-gray-300 uppercase w-[150px]">
-                                    Artículo                {" "}
+                  Artículo
                 </th>
-                               {" "}
                 {INVENTORY_LOCATIONS.map((loc) => (
                   <th
                     key={loc}
                     className="px-2 py-3 text-right text-xs font-medium text-gray-300 uppercase w-[70px] whitespace-nowrap overflow-hidden text-ellipsis"
                     style={{ minWidth: "70px", maxWidth: "70px" }}
                   >
-                                       {" "}
-                    {loc.length > 8 ? loc.substring(0, 6) + "..." : loc}       
-                             {" "}
+                    {loc.length > 8 ? loc.substring(0, 6) + "..." : loc}
                   </th>
                 ))}
-                               {" "}
                 <th
                   className="px-2 py-3 text-right text-xs font-medium text-gray-300 uppercase w-[70px] whitespace-nowrap"
                   style={{ minWidth: "70px", maxWidth: "70px" }}
                 >
-                                    Total                {" "}
+                  Total
                 </th>
-                             {" "}
               </tr>
-                         {" "}
             </thead>
-                       {" "}
             <tbody className="bg-gray-800 divide-y divide-gray-700">
-                           {" "}
               {itemsWithTotals.map((item, itemIndex) => {
                 const calculatedTotal = item.calculatedTotal || 0;
                 return (
@@ -973,11 +903,9 @@ const InventoryComponent: React.FC<InventoryProps> = ({
                     key={item.itemId || itemIndex}
                     className="hover:bg-gray-700/50"
                   >
-                                       {" "}
                     <td className="px-2 py-2 whitespace-nowrap text-sm font-medium text-white w-[150px]">
-                                            {item.name}                   {" "}
+                      {item.name}
                     </td>
-                                       {" "}
                     {INVENTORY_LOCATIONS.map((loc) => {
                       const stockValue =
                         item.stockByLocationSnapshot?.[loc] || 0;
@@ -990,13 +918,10 @@ const InventoryComponent: React.FC<InventoryProps> = ({
                               : "text-slate-400"
                           }`}
                         >
-                                                   {" "}
-                          {stockValue.toFixed(1).replace(".", ",")}             
-                                   {" "}
+                          {stockValue.toFixed(1).replace(".", ",")}
                         </td>
                       );
                     })}
-                                       {" "}
                     <td
                       className={`px-2 py-2 whitespace-nowrap text-lg text-right font-bold w-[70px] overflow-hidden text-ellipsis ${
                         calculatedTotal > 0.001
@@ -1004,19 +929,13 @@ const InventoryComponent: React.FC<InventoryProps> = ({
                           : "text-slate-400"
                       }`}
                     >
-                                           {" "}
-                      {calculatedTotal.toFixed(1).replace(".", ",")}           
-                             {" "}
+                      {calculatedTotal.toFixed(1).replace(".", ",")}
                     </td>
-                                     {" "}
                   </tr>
                 );
               })}
-                         {" "}
             </tbody>
-                     {" "}
           </table>
-                 {" "}
         </div>
       );
     };
@@ -1029,17 +948,13 @@ const InventoryComponent: React.FC<InventoryProps> = ({
         hideSaveButton={true}
         size="max-w-7xl"
       >
-               {" "}
         <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2">
-                   {" "}
           <p className="text-sm text-slate-400 mb-4">
-                        Registrado el            {" "}
-            {formatUTCToLocal(viewingRecord.date)}.          {" "}
+            Registrado el
+            {formatUTCToLocal(viewingRecord.date)}.
           </p>
-                    {isAnalysis ? renderAnalysisTable() : renderSnapshotTable()}
-                 {" "}
+          {isAnalysis ? renderAnalysisTable() : renderSnapshotTable()}
         </div>
-             {" "}
       </Modal>
     );
   };
@@ -1055,7 +970,6 @@ const InventoryComponent: React.FC<InventoryProps> = ({
 
   const renderInventoryForm = () => (
     <div className="space-y-4">
-           {" "}
       <input
         type="text"
         placeholder="Nombre del Artículo"
@@ -1063,35 +977,29 @@ const InventoryComponent: React.FC<InventoryProps> = ({
         onChange={(e) => handleInventoryChange("name", e.target.value)}
         className="bg-gray-700 text-white rounded p-2 w-full"
       />
-           {" "}
       <select
         value={currentInventoryItem.category || ""}
         onChange={(e) => handleInventoryChange("category", e.target.value)}
         className="bg-gray-700 text-white rounded p-2 w-full"
       >
-               {" "}
         <option value="" disabled>
-                    Seleccionar Categoría        {" "}
+          Seleccionar Categoría
         </option>
-               {" "}
         {CATEGORY_ORDER.map((category) => (
           <option key={category} value={category}>
-                        {category}         {" "}
+            {category}
           </option>
         ))}
-               {" "}
         {currentInventoryItem.category &&
           !CATEGORY_ORDER.includes(currentInventoryItem.category) && (
             <option
               key={currentInventoryItem.category}
               value={currentInventoryItem.category}
             >
-                            {currentInventoryItem.category} (Custom)            {" "}
+              {currentInventoryItem.category} (Custom)
             </option>
           )}
-             {" "}
       </select>
-         {" "}
     </div>
   );
 
@@ -1121,18 +1029,14 @@ const InventoryComponent: React.FC<InventoryProps> = ({
 
     return (
       <div className="space-y-4">
-               {" "}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                   {" "}
           <input
             type="date"
             value={currentPurchaseOrder.orderDate}
             onChange={(e) => handleOrderChange("orderDate", e.target.value)}
             className="bg-gray-700 text-white rounded p-2 w-full"
           />
-                   {" "}
           <div className="relative">
-                       {" "}
             <input
               type="text"
               list="supplier-list"
@@ -1143,29 +1047,20 @@ const InventoryComponent: React.FC<InventoryProps> = ({
               }
               className="bg-gray-700/50 text-white rounded p-2 w-full"
             />
-                       {" "}
             <datalist id="supplier-list">
-                           {" "}
               {suppliers.map((s) => (
                 <option key={s} value={s} />
               ))}
-                         {" "}
             </datalist>
-                     {" "}
           </div>
-                 {" "}
         </div>
-               {" "}
         <h3 className="text-lg font-bold text-white pt-4">
-                    Artículos del Pedido        {" "}
+          Artículos del Pedido
         </h3>
-               {" "}
         <div className="relative mb-4">
-                   {" "}
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
-                        <SearchIcon />         {" "}
+            <SearchIcon />
           </div>
-                   {" "}
           <input
             type="text"
             placeholder="Buscar producto para añadir..."
@@ -1173,12 +1068,9 @@ const InventoryComponent: React.FC<InventoryProps> = ({
             onChange={(e) => setOrderSearchTerm(e.target.value)}
             className="bg-gray-700 text-white rounded-lg pl-10 pr-4 py-2 w-full border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 placeholder-gray-400"
           />
-                 {" "}
         </div>
-               {" "}
         {orderSearchTerm && filteredOrderItems.length > 0 && (
           <div className="bg-slate-900/50 rounded-md p-2 space-y-1">
-                       {" "}
             {filteredOrderItems.slice(0, 5).map((item) => {
               const isAlreadyInOrder = currentPurchaseOrder.items.some(
                 (oi) => oi.inventoryItemId === item.id
@@ -1193,9 +1085,7 @@ const InventoryComponent: React.FC<InventoryProps> = ({
                       : "hover:bg-slate-700/50"
                   }`}
                 >
-                                   {" "}
-                  <span className="text-white text-sm">{item.name}</span>       
-                           {" "}
+                  <span className="text-white text-sm">{item.name}</span>
                   <button
                     onClick={() => handleAddProductFromSearch(item)}
                     className={`p-1 rounded text-white text-xs flex items-center gap-1 ${
@@ -1205,18 +1095,13 @@ const InventoryComponent: React.FC<InventoryProps> = ({
                     }`}
                     disabled={isAlreadyInOrder}
                   >
-                                       {" "}
-                    {isAlreadyInOrder ? "Añadido" : "✅ Añadir"}               
-                     {" "}
+                    {isAlreadyInOrder ? "Añadido" : "✅ Añadir"}
                   </button>
-                                 {" "}
                 </div>
               );
             })}
-                     {" "}
           </div>
         )}
-               {" "}
         {currentPurchaseOrder.items.map((orderItem, index) => {
           const itemDetails = inventoryItems.find(
             (item) => item.id === orderItem.inventoryItemId
@@ -1233,10 +1118,9 @@ const InventoryComponent: React.FC<InventoryProps> = ({
               key={index}
               className="flex gap-2 items-center p-2 bg-gray-900/50 rounded-md"
             >
-                           {" "}
               {orderItem.inventoryItemId && itemDetails ? (
                 <span className="text-white w-1/3 flex-shrink-0">
-                                    {itemDetails.name}               {" "}
+                  {itemDetails.name}
                 </span>
               ) : (
                 <select
@@ -1250,18 +1134,14 @@ const InventoryComponent: React.FC<InventoryProps> = ({
                   }
                   className="bg-gray-700 text-white rounded p-2 flex-grow"
                 >
-                                   {" "}
-                  <option value="">Seleccionar Artículo</option>               
-                   {" "}
+                  <option value="">Seleccionar Artículo</option>
                   {availableItems.map((i) => (
                     <option key={i.id} value={i.id}>
-                                            {i.name}                   {" "}
+                      {i.name}
                     </option>
                   ))}
-                                 {" "}
                 </select>
               )}
-                           {" "}
               <input
                 type="text"
                 placeholder="Cantidad"
@@ -1271,49 +1151,39 @@ const InventoryComponent: React.FC<InventoryProps> = ({
                 }
                 className="bg-gray-700 text-white rounded p-2 w-24"
               />
-                           {" "}
               <div className="relative w-28 invisible">
-                               {" "}
                 <input
                   type="text"
                   disabled
                   className="bg-gray-700 text-white rounded p-2 w-full pr-8"
                   value={"0,00"}
                 />
-                               {" "}
                 <span className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 pointer-events-none">
-                                    €                {" "}
+                  €
                 </span>
-                             {" "}
               </div>
-                           {" "}
               <button
                 onClick={() => removeOrderItem(index)}
                 className="p-2 bg-red-600 rounded text-white"
               >
-                                <TrashIcon />             {" "}
+                <TrashIcon />
               </button>
-                         {" "}
             </div>
           );
         })}
-               {" "}
         <button
           onClick={addOrderItem}
           className="text-indigo-400 hover:text-indigo-300 text-sm font-semibold"
         >
-                    + Añadir Artículo (manualmente)        {" "}
+          + Añadir Artículo (manualmente)
         </button>
-               {" "}
         <div className="flex justify-end p-4 border-t border-gray-700 rounded-b-lg mt-4 bg-gray-800">
-                   {" "}
           <button
             onClick={closeOrderModal}
             className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg mr-2 transition duration-300"
           >
-                        Cancelar          {" "}
+            Cancelar
           </button>
-                   {" "}
           <button
             onClick={handleSaveOrder}
             disabled={!canSave}
@@ -1324,71 +1194,53 @@ const InventoryComponent: React.FC<InventoryProps> = ({
             }`}
             title={disabledTitle}
           >
-                        Guardar          {" "}
+            Guardar
           </button>
-                 {" "}
         </div>
-             {" "}
       </div>
     );
   };
 
   return (
     <div className="p-4 animate-fade-in">
-           {" "}
       <div className="flex justify-between items-center mb-6">
-               {" "}
         <h1 className="text-3xl font-bold text-white">Gestión de Inventario</h1>
-               {" "}
         <div className="flex gap-2">
-                   {" "}
           <div className="bg-gray-800 p-1 rounded-lg flex space-x-1">
-                       {" "}
             <button
               onClick={() => setActiveTab("inventory")}
               className={tabClasses("inventory")}
             >
-                            Inventario            {" "}
+              Inventario
             </button>
-                       {" "}
             <button
               onClick={() => setActiveTab("orders")}
               className={tabClasses("orders")}
             >
-                            Pedidos            {" "}
+              Pedidos
             </button>
-                       {" "}
             <button
               onClick={() => setActiveTab("analysis")}
               className={tabClasses("analysis")}
             >
-                            Análisis            {" "}
+              Análisis
             </button>
-                       {" "}
             <button
               onClick={() => setActiveTab("history")}
               className={tabClasses("history")}
             >
-                            Historial            {" "}
+              Historial
             </button>
-                     {" "}
           </div>
-                 {" "}
         </div>
-             {" "}
       </div>
-           {" "}
       {activeTab === "inventory" && (
         <div className="space-y-6">
-                   {" "}
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4">
-                       {" "}
             <div className="relative w-full md:max-w-xs">
-                           {" "}
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
-                                <SearchIcon />             {" "}
+                <SearchIcon />
               </div>
-                           {" "}
               <input
                 type="text"
                 placeholder="Buscar bebida..."
@@ -1396,44 +1248,32 @@ const InventoryComponent: React.FC<InventoryProps> = ({
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="bg-gray-700 text-white rounded-lg pl-10 pr-4 py-2 w-full border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 placeholder-gray-400"
               />
-                         {" "}
             </div>
-                       {" "}
             <div className="flex justify-end items-center gap-2 flex-wrap w-full md:w-auto">
-                           {" "}
               <button
                 onClick={handleResetInventory}
                 className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2 transition duration-300"
               >
-                                <RefreshIcon />               {" "}
-                <span className="hidden sm:inline">Resetear Inventario</span>   
-                         {" "}
+                <RefreshIcon />
+                <span className="hidden sm:inline">Resetear Inventario</span>
               </button>
-                           {" "}
               <button
                 onClick={handleSaveInventorySnapshot}
                 className="bg-violet-600 hover:bg-violet-700 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2 transition duration-300"
               >
-                                <InventoryIcon />                {" "}
-                <span className="hidden sm:inline">Guardar Inventario</span>   
-                         {" "}
+                <InventoryIcon />
+                <span className="hidden sm:inline">Guardar Inventario</span>
               </button>
-                           {" "}
               <button
                 onClick={() => openInventoryModal(undefined)}
                 className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2 transition duration-300"
               >
-                                <PlusIcon />                {" "}
-                <span className="hidden sm:inline">Nuevo Artículo</span>       
-                     {" "}
+                <PlusIcon />
+                <span className="hidden sm:inline">Nuevo Artículo</span>
               </button>
-                         {" "}
             </div>
-                     {" "}
           </div>
-                   {" "}
           <div className="space-y-4">
-                       {" "}
             {Object.entries(groupedItems)
               .sort(([catA], [catB]) => {
                 const indexA = CATEGORY_ORDER.indexOf(catA);
@@ -1452,63 +1292,42 @@ const InventoryComponent: React.FC<InventoryProps> = ({
                   itemCount={items.length}
                   initialOpen={true} // ABRIR POR DEFECTO EN INVENTARIO
                 >
-                                   {" "}
                   <div className="overflow-x-auto">
-                                       {" "}
                     <table className="min-w-full">
-                                           {" "}
                       <thead>
-                                               {" "}
                         <tr>
-                                                   {" "}
                           <th className="px-2 py-1 text-left text-xs font-medium text-gray-300 uppercase sticky left-0 bg-slate-800 z-10 w-[180px]">
-                                                        NOMBRE                  
-                                   {" "}
+                            NOMBRE
                           </th>
-                                                   {" "}
                           {INVENTORY_LOCATIONS.map((loc) => (
                             <th
                               className="px-2 py-1 text-center text-[10px] font-medium text-gray-300 uppercase w-[70px] whitespace-nowrap overflow-hidden text-ellipsis"
                               key={loc}
                             >
-                                                           {" "}
                               {loc.length > 8
                                 ? loc.substring(0, 7).toUpperCase()
                                 : loc.toUpperCase()}
-                                                         {" "}
                             </th>
                           ))}
-                                                   {" "}
                           <th className="px-2 py-1 text-center text-xs font-medium text-gray-300 uppercase w-20">
-                                                        TOTAL                  
-                                   {" "}
+                            TOTAL
                           </th>
-                                                   {" "}
                           <th className="px-2 py-1 text-right text-xs font-medium text-gray-300 uppercase w-20">
-                                                        ACCIONES                
-                                     {" "}
+                            ACCIONES
                           </th>
-                                                 {" "}
                         </tr>
-                                             {" "}
                       </thead>
-                                           {" "}
                       <tbody className="divide-y divide-gray-700/50">
-                                               {" "}
                         {items.map((item) => (
                           <tr key={item.id} className="hover:bg-gray-700/50">
-                                                       {" "}
                             <td className="px-2 py-1 whitespace-nowrap text-sm font-medium text-white sticky left-0 bg-slate-800 z-10 w-[180px]">
-                                                            {item.name}         
-                                               {" "}
+                              {item.name}
                             </td>
-                                                       {" "}
                             {INVENTORY_LOCATIONS.map((loc) => (
                               <td
                                 key={loc}
                                 className="px-2 py-1 whitespace-nowrap w-[70px]"
                               >
-                                                               {" "}
                                 <input
                                   type="text"
                                   value={
@@ -1532,12 +1351,9 @@ const InventoryComponent: React.FC<InventoryProps> = ({
                                   className="bg-slate-700 text-white rounded p-0.5 w-14 text-center text-sm border border-slate-600"
                                   placeholder="0"
                                 />
-                                                             {" "}
                               </td>
                             ))}
-                                                       {" "}
                             <td className="px-4 py-2 whitespace-nowrap text-lg font-bold w-20">
-                                                           {" "}
                               <span
                                 className={
                                   calculateTotalStock(item) > 0.001
@@ -1545,25 +1361,18 @@ const InventoryComponent: React.FC<InventoryProps> = ({
                                     : "text-slate-400"
                                 }
                               >
-                                                               {" "}
                                 {calculateTotalStock(item)
                                   .toFixed(1)
                                   .replace(".", ",")}
-                                                             {" "}
                               </span>
-                                                         {" "}
                             </td>
-                                                       {" "}
                             <td className="px-4 py-2 whitespace-nowrap text-right text-sm w-20">
-                                                           {" "}
                               <button
                                 onClick={() => openInventoryModal(item)}
                                 className="text-indigo-400 mr-1"
                               >
-                                                                <PencilIcon /> 
-                                                           {" "}
+                                <PencilIcon />
                               </button>
-                                                           {" "}
                               <button
                                 onClick={() =>
                                   window.confirm(
@@ -1572,92 +1381,61 @@ const InventoryComponent: React.FC<InventoryProps> = ({
                                 }
                                 className="text-red-500"
                               >
-                                                                <TrashIcon />   
-                                                         {" "}
+                                <TrashIcon />
                               </button>
-                                                         {" "}
                             </td>
-                                                     {" "}
                           </tr>
                         ))}
-                                             {" "}
                       </tbody>
-                                         {" "}
                     </table>
-                                     {" "}
                   </div>
-                                 {" "}
                 </CategoryAccordion>
               ))}
-                     {" "}
           </div>
-                 {" "}
         </div>
       )}
-           {" "}
       {activeTab === "orders" && (
         <div>
-                   {" "}
           <div className="text-right mb-4">
-                       {" "}
             <button
               onClick={() => openOrderModal()}
               className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2 transition duration-300 ml-auto"
             >
-                            <PlusIcon />              {" "}
-              <span className="hidden sm:inline">Nuevo Pedido</span>           {" "}
+              <PlusIcon />
+              <span className="hidden sm:inline">Nuevo Pedido</span>
             </button>
-                       {" "}
           </div>
-                   {" "}
           <div className="bg-gray-800 shadow-xl rounded-lg overflow-x-auto">
-                       {" "}
             <table className="min-w-full divide-y divide-gray-700">
-                           {" "}
               <thead className="bg-gray-700/50">
-                               {" "}
                 <tr>
-                                   {" "}
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase">
-                                        Fecha Pedido                  {" "}
+                    Fecha Pedido
                   </th>
-                                   {" "}
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase">
-                                        Proveedor                  {" "}
+                    Proveedor
                   </th>
-                                   {" "}
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase">
-                                        Estado                  {" "}
+                    Estado
                   </th>
-                                   {" "}
                   <th className="px-6 py-3 text-center text-xs font-medium text-gray-300 uppercase">
-                                        Completado                  {" "}
+                    Completado
                   </th>
-                                   {" "}
                   <th className="px-6 py-3 text-right text-xs font-medium text-gray-300 uppercase">
-                                        Acciones                  {" "}
+                    Acciones
                   </th>
-                                 {" "}
                 </tr>
-                             {" "}
               </thead>
-                           {" "}
               <tbody className="bg-gray-800 divide-y divide-gray-700">
-                               {" "}
                 {purchaseOrders.map((order) => (
                   <tr key={order.id} className="hover:bg-gray-700/50">
-                                       {" "}
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
-                                            {order.orderDate}                   {" "}
+                      {order.orderDate}
                     </td>
-                                       {" "}
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-white">
-                                            {order.supplierName}               
-                         {" "}
+                      {order.supplierName}
                     </td>
-                                       {" "}
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">
-                                           {" "}
                       <span
                         className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
                           order.status === PurchaseOrderStatus.Completed ||
@@ -1666,41 +1444,30 @@ const InventoryComponent: React.FC<InventoryProps> = ({
                             : "bg-yellow-500/20 text-yellow-400"
                         }`}
                       >
-                                                {order.status}                 
-                           {" "}
+                        {order.status}
                       </span>
-                                         {" "}
                     </td>
-                                       {" "}
                     <td className="px-6 py-4 whitespace-nowrap text-center text-sm">
-                                           {" "}
                       {order.status === PurchaseOrderStatus.Pending && (
                         <button
                           onClick={() => handleReceiveOrder(order)}
                           className="px-2 py-1 bg-green-600/30 text-green-400 hover:bg-green-600 hover:text-white rounded text-xs font-bold transition duration-300"
                         >
-                                                    Recibir                    
-                             {" "}
+                          Recibir
                         </button>
                       )}
-                                           {" "}
                       {(order.status === PurchaseOrderStatus.Completed ||
                         order.status === PurchaseOrderStatus.Archived) && (
                         <span className="text-green-400 font-bold">OK</span>
                       )}
-                                         {" "}
                     </td>
-                                       {" "}
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
-                                           {" "}
                       <button
                         onClick={() => openOrderModal(order)}
                         className="text-indigo-400 mr-4"
                       >
-                                                <PencilIcon />                 
-                           {" "}
+                        <PencilIcon />
                       </button>
-                                           {" "}
                       <button
                         onClick={() =>
                           window.confirm(
@@ -1709,48 +1476,32 @@ const InventoryComponent: React.FC<InventoryProps> = ({
                         }
                         className="text-red-500"
                       >
-                                                <TrashIcon />                   
-                         {" "}
+                        <TrashIcon />
                       </button>
-                                         {" "}
                     </td>
-                                     {" "}
                   </tr>
                 ))}
-                             {" "}
               </tbody>
-                         {" "}
             </table>
-                     {" "}
           </div>
-                 {" "}
         </div>
       )}
-           {" "}
       {activeTab === "analysis" && (
         <div className="bg-gray-800 shadow-xl rounded-lg overflow-x-auto p-4">
-                   {" "}
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4">
-                       {" "}
             <h2 className="text-xl font-bold text-white">
-                            Análisis de Consumo Semanal            {" "}
+              Análisis de Consumo Semanal
             </h2>
-                       {" "}
             <div className="flex items-center gap-2 flex-wrap">
-                           {" "}
               <button
                 onClick={handleSaveCurrentInventory}
                 className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2 transition duration-300"
               >
-                                Guardar Análisis de Consumo              {" "}
+                Guardar Análisis de Consumo
               </button>
-                         {" "}
             </div>
-                     {" "}
           </div>
-                   {" "}
           <div className="space-y-4">
-                                   {" "}
             {analysisGroupedItems.map(
               ({ category, items, categoryTotalRelevantStock }) => (
                 <CategoryAccordion
@@ -1759,51 +1510,31 @@ const InventoryComponent: React.FC<InventoryProps> = ({
                   itemCount={items.length}
                   initialOpen={true}
                 >
-                                   {" "}
                   <div className="overflow-x-auto">
-                                       {" "}
                     <table className="min-w-full divide-y divide-gray-700">
-                                           {" "}
                       <thead className="bg-gray-700/50">
-                                               {" "}
                         <tr>
-                                                   {" "}
                           <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">
-                                                        Artículo                
-                                     {" "}
+                            Artículo
                           </th>
-                                                   {" "}
                           <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">
-                                                        Stock Actual            
-                                         {" "}
+                            Stock Actual
                           </th>
-                                                   {" "}
                           <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">
-                                                        En Pedidos              
-                                       {" "}
+                            En Pedidos
                           </th>
-                                                   {" "}
                           <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">
-                                                        Stock Semana Anterior  
-                                                   {" "}
+                            Stock Semana Anterior
                           </th>
-                                                   {" "}
                           <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">
-                                                        Stock Inicial Total    
-                                                 {" "}
+                            Stock Inicial Total
                           </th>
-                                                   {" "}
                           <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase">
-                                                        Consumo                
-                                     {" "}
+                            Consumo
                           </th>
-                                                 {" "}
                         </tr>
-                                             {" "}
                       </thead>
-                                           {" "}
                       <tbody className="bg-gray-800 divide-y divide-gray-700">
-                                               {" "}
                         {items.map((item) => {
                           const totalStock = calculateTotalStock(item);
                           const pendingStock = stockInOrders[item.id] || 0;
@@ -1816,36 +1547,21 @@ const InventoryComponent: React.FC<InventoryProps> = ({
 
                           return (
                             <tr key={item.id} className="hover:bg-gray-700/50">
-                                                           {" "}
                               <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-white">
-                                                                {item.name}     
-                                                       {" "}
+                                {item.name}
                               </td>
-                                                           {" "}
                               <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-300">
-                                                               {" "}
-                                {totalStock.toFixed(1).replace(".", ",")}       
-                                                     {" "}
+                                {totalStock.toFixed(1).replace(".", ",")}
                               </td>
-                                                           {" "}
                               <td className="px-4 py-4 whitespace-nowrap text-sm text-yellow-400">
-                                                               {" "}
-                                {pendingStock.toFixed(1).replace(".", ",")}     
-                                                       {" "}
+                                {pendingStock.toFixed(1).replace(".", ",")}
                               </td>
-                                                           {" "}
                               <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-300">
-                                                               {" "}
-                                {previousEndStock.toFixed(1).replace(".", ",")} 
-                                                           {" "}
+                                {previousEndStock.toFixed(1).replace(".", ",")}
                               </td>
-                                                           {" "}
                               <td className="px-4 py-4 whitespace-nowrap text-sm text-blue-400 font-bold">
-                                                               {" "}
                                 {initialTotalStock.toFixed(1).replace(".", ",")}
-                                                             {" "}
                               </td>
-                                                           {" "}
                               <td
                                 className={`px-4 py-4 whitespace-nowrap text-sm font-bold ${
                                   consumption >= 0
@@ -1853,117 +1569,84 @@ const InventoryComponent: React.FC<InventoryProps> = ({
                                     : "text-red-400"
                                 }`}
                               >
-                                                               {" "}
-                                {consumption.toFixed(1).replace(".", ",")}     
-                                                       {" "}
+                                {consumption.toFixed(1).replace(".", ",")}
                               </td>
-                                                         {" "}
                             </tr>
                           );
                         })}
-                                             {" "}
                       </tbody>
-                                         {" "}
                     </table>
-                                     {" "}
                   </div>
-                                 {" "}
                 </CategoryAccordion>
               )
             )}
-                     {" "}
           </div>
-                 {" "}
         </div>
       )}
-           {" "}
       {activeTab === "history" && (
         <div className="bg-gray-800 shadow-xl rounded-lg p-6">
-                   {" "}
           <div className="flex justify-between items-center mb-4">
-                       {" "}
             <h2 className="text-2xl font-bold text-white">
-                            Historial de Inventarios Guardados 📊            {" "}
+              Historial de Inventarios Guardados 📊
             </h2>
-                       {" "}
             <button
               onClick={handleDeleteAllHistory}
               className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2 transition duration-300"
             >
-                            <TrashIcon /> Borrar Historial Completo            {" "}
+              <TrashIcon /> Borrar Historial Completo
             </button>
-                     {" "}
           </div>
-                   {" "}
           <WeeklyConsumptionAnalysis
             inventoryHistory={validInventoryHistory}
             formatUTCToLocal={formatUTCToLocal}
           />
-                   {" "}
           <h3 className="text-xl font-bold text-white mb-3 mt-8 border-t border-gray-700 pt-4">
-                        Registros Anteriores          {" "}
+            Registros Anteriores
           </h3>
-                   {" "}
           {validInventoryHistory.length > 0 ? (
             <ul className="space-y-3">
-                           {" "}
               {validInventoryHistory.map((record: InventoryRecord) => (
                 <li
                   key={record.id}
                   className="bg-slate-900/50 p-4 rounded-lg flex justify-between items-center hover:bg-slate-700/50 transition-colors"
                 >
-                                   {" "}
                   <div>
-                                       {" "}
-                    <p className="font-semibold text-white">{record.label}</p> 
-                                     {" "}
+                    <p className="font-semibold text-white">{record.label}</p>
                     <p className="text-sm text-slate-400">
-                                            {formatUTCToLocal(record.date)}     
-                                   {" "}
+                      {formatUTCToLocal(record.date)}
                     </p>
-                                     {" "}
                   </div>
-                                   {" "}
                   <div className="flex gap-3">
-                                       {" "}
                     <button
                       onClick={() => openRecordDetailModal(record)}
                       className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2 transition duration-300"
                     >
-                                            Ver Detalles                    {" "}
+                      Ver Detalles
                     </button>
-                                     {" "}
                   </div>
-                                 {" "}
                 </li>
               ))}
-                         {" "}
             </ul>
           ) : (
             <div className="text-center py-10 text-slate-500">
-                            <p>No hay análisis guardados en el historial.</p>   
-                       {" "}
+              <p>No hay análisis guardados en el historial.</p>
               <p className="text-sm mt-2">
-                                Ve a la pestaña de 'Análisis' para guardar el
-                estado actual del                 inventario.              {" "}
+                Ve a la pestaña de 'Análisis' para guardar el estado actual del
+                inventario.
               </p>
-                         {" "}
             </div>
           )}
-                 {" "}
         </div>
       )}
-           {" "}
       {isInventoryModalOpen && (
         <Modal
           title={currentInventoryItem.id ? "Editar Artículo" : "Nuevo Artículo"}
           onClose={closeInventoryModal}
           onSave={handleSaveInventory}
         >
-                    {renderInventoryForm()}       {" "}
+          {renderInventoryForm()}
         </Modal>
       )}
-           {" "}
       {isOrderModalOpen && (
         <Modal
           title={
@@ -1972,10 +1655,10 @@ const InventoryComponent: React.FC<InventoryProps> = ({
           onClose={closeOrderModal}
           hideSaveButton={true}
         >
-                    {renderOrderForm()}       {" "}
+          {renderOrderForm()}
         </Modal>
       )}
-            {viewingRecord && renderInventoryRecordDetailModal()}   {" "}
+      {viewingRecord && renderInventoryRecordDetailModal()}
     </div>
   );
 };
