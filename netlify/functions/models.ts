@@ -1,8 +1,10 @@
 import mongoose, { Schema } from "mongoose";
 
+// --- Definiciones de Esquemas de Sesiones y Fuentes de Ingreso ---
+
 const SessionSchema = new Schema(
   {
-    date: String,
+    date: { type: String, required: true }, // Fecha de la sesión es requerida
     description: String,
     income: { type: Map, of: Number },
     expenses: [{ description: String, amount: Number }],
@@ -12,11 +14,10 @@ const SessionSchema = new Schema(
   { timestamps: true }
 );
 
-// Transform _id to id
+// Configuración para transformar _id en 'id' en el frontend
 SessionSchema.set("toJSON", {
   virtuals: true,
   versionKey: false,
-  // CORRECCIÓN: Tipar ret como 'any' para permitir la adición de 'id'
   transform: function (doc, ret: any) {
     ret.id = ret._id.toString();
     delete ret._id;
@@ -24,24 +25,27 @@ SessionSchema.set("toJSON", {
 });
 
 const IncomeSourceSchema = new Schema({
-  id: String, // Keep original ID for reference if needed, or rely on _id
+  id: String,
   label: String,
 });
+
 IncomeSourceSchema.set("toJSON", {
   virtuals: true,
   versionKey: false,
-  // CORRECCIÓN: Tipar ret como 'any'
   transform: (doc, ret: any) => {
     ret.id = ret._id.toString();
     delete ret._id;
   },
 });
 
+// ----------------------------------------------------
+// --- Definiciones de Esquemas de Inventario y Pedidos ---
+// ----------------------------------------------------
+
 const InventoryItemSchema = new Schema(
   {
-    // CORRECCIÓN: Permite IDs generados por el cliente (UUIDs)
-    _id: { type: String, required: true },
-    name: String,
+    _id: { type: String, required: true }, // ID generado por el frontend (UUID)
+    name: { type: String, required: true },
     category: String,
     stockByLocation: { type: Map, of: Number },
   },
@@ -51,27 +55,26 @@ const InventoryItemSchema = new Schema(
 InventoryItemSchema.set("toJSON", {
   virtuals: true,
   versionKey: false,
-  // CORRECCIÓN: Tipar ret como 'any'
   transform: function (doc, ret: any) {
-    ret.id = ret._id; // _id ya es string aquí
+    ret.id = ret._id;
     delete ret._id;
   },
 });
 
+// 🛑 CORRECCIÓN CLAVE AQUÍ: Reforzamiento de campos requeridos para evitar fallos 500
 const PurchaseOrderSchema = new Schema(
   {
-    // CORRECCIÓN: Permite IDs generados por el cliente (UUIDs)
-    _id: { type: String, required: true },
-    orderDate: String,
+    _id: { type: String, required: true }, // ID generado por el frontend (UUID)
+    orderDate: { type: String, required: true },
     deliveryDate: String,
-    supplierName: String,
-    status: String,
+    supplierName: { type: String, required: true },
+    status: { type: String, required: true },
     totalAmount: Number,
     items: [
       {
-        inventoryItemId: String,
-        quantity: Number,
-        costAtTimeOfPurchase: Number,
+        inventoryItemId: { type: String, required: true },
+        quantity: { type: Number, required: true, min: 0 },
+        costAtTimeOfPurchase: { type: Number, default: 0 }, // Establece default=0 para que no sea requerido si no se envía
       },
     ],
   },
@@ -81,9 +84,8 @@ const PurchaseOrderSchema = new Schema(
 PurchaseOrderSchema.set("toJSON", {
   virtuals: true,
   versionKey: false,
-  // CORRECCIÓN: Tipar ret como 'any'
   transform: function (doc, ret: any) {
-    ret.id = ret._id; // _id ya es string aquí
+    ret.id = ret._id;
     delete ret._id;
   },
 });
@@ -93,13 +95,12 @@ const InventoryRecordItemSchema = new Schema(
   {
     itemId: String,
     name: String,
-
     currentStock: Number,
     pendingStock: Number,
     initialStock: Number,
     endStock: Number,
     consumption: Number,
-    stockByLocationSnapshot: { type: Map, of: Number }, // Campo para el detalle del Snapshot
+    stockByLocationSnapshot: { type: Map, of: Number },
   },
   { _id: false }
 );
@@ -107,11 +108,10 @@ const InventoryRecordItemSchema = new Schema(
 // Esquema completo para InventoryRecord
 const InventoryRecordSchema = new Schema(
   {
-    // CORRECCIÓN: Permite IDs generados por el cliente (UUIDs)
     _id: { type: String, required: true },
     date: String,
-    label: String, // Etiqueta (Ej: "Análisis de consumo (DD/MM/YYYY)")
-    type: String, // Tipo de registro ("snapshot" o "analysis")
+    label: String,
+    type: String,
     items: [InventoryRecordItemSchema],
   },
   { _id: false, timestamps: true }
@@ -120,12 +120,34 @@ const InventoryRecordSchema = new Schema(
 InventoryRecordSchema.set("toJSON", {
   virtuals: true,
   versionKey: false,
-  // CORRECCIÓN: Tipar ret como 'any'
   transform: function (doc, ret: any) {
-    ret.id = ret._id; // _id ya es string aquí
+    ret.id = ret._id;
     delete ret._id;
   },
 });
+
+// ----------------------------------------------------
+// --- Definición del Esquema de Configuración Global ---
+// ----------------------------------------------------
+
+const ConfigSchema = new Schema(
+  {
+    // Documento Singleton para guardar configuraciones globales como incomeSources
+    incomeSources: [IncomeSourceSchema],
+  },
+  { timestamps: true }
+);
+
+ConfigSchema.set("toJSON", {
+  virtuals: true,
+  versionKey: false,
+  transform: function (doc, ret: any) {
+    ret.id = ret._id;
+    delete ret._id;
+  },
+});
+
+// --- Exportaciones de Modelos ---
 
 export const SessionModel =
   mongoose.models.Session || mongoose.model("Session", SessionSchema);
@@ -141,3 +163,7 @@ export const InventoryRecordModel =
 export const IncomeSourceModel =
   mongoose.models.IncomeSource ||
   mongoose.model("IncomeSource", IncomeSourceSchema);
+
+// EXPORTACIÓN CLAVE: Se añade ConfigModel para que config.ts compile
+export const ConfigModel =
+  mongoose.models.Config || mongoose.model("Config", ConfigSchema);

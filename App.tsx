@@ -1321,11 +1321,24 @@ const App: React.FC = () => {
         addOrUpdate(setPurchaseOrders, savedOrder as PurchaseOrder);
       } catch (e) {
         console.error("Error saving order:", e);
-        alert(
-          `Error al guardar el pedido: ${
-            e instanceof Error ? e.message : "Error desconocido"
-          }`
-        );
+
+        let errorMessage = "Error desconocido.";
+
+        if (e instanceof Error) {
+          // Esto mostrará el error generado por src/api/index.ts,
+          // que incluye el mensaje de la función lambda ("Failed to connect to database.")
+          errorMessage = e.message;
+        } else if (
+          typeof e === "object" &&
+          e !== null &&
+          "message" in e &&
+          typeof e.message === "string"
+        ) {
+          errorMessage = e.message;
+        }
+
+        // Muestra la alerta con el mensaje detallado
+        alert(`Error al guardar el pedido: ${errorMessage}`);
       }
     },
     [addOrUpdate]
