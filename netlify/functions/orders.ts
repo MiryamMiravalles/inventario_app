@@ -1,14 +1,30 @@
 import { Handler } from "@netlify/functions";
-// 🛑 CORRECCIÓN: Usar importación por defecto
-import connectToDatabase from "./utils/db";
-import { PurchaseOrderModel } from "./models";
-import mongoose from "mongoose";
+import connectToDatabase from "./utils/data"; // Ahora devuelve el objeto DB de MongoClient
+import { PurchaseOrderModel } from "./models"; // Lo mantenemos solo para referencia de estructura si fuera necesario
+import mongoose from "mongoose"; // Necesario para generar el ID (ObjectId)
+// Importamos Collection y Document de MongoDB para tipado
+import { Collection, Document } from "mongodb";
+
+// 🛑 NUEVA INTERFAZ: Define el tipo de documento con _id como string
+interface PurchaseOrderDocument extends Document {
+  _id: string;
+  orderDate: string;
+  deliveryDate?: string;
+  supplierName: string;
+  // Añadir aquí el resto de las propiedades del pedido si se quiere un tipado estricto
+  // Para simplificar y mantener la compatibilidad con el código existente, Document y _id: string es suficiente.
+}
+
+// Nombre de la colección donde se guardan los pedidos. Mongoose pluraliza 'PurchaseOrder' a 'purchaseorders'.
+const COLLECTION_NAME = "purchaseorders";
 
 const handler: Handler = async (event, context) => {
   context.callbackWaitsForEmptyEventLoop = false;
+  let db;
 
   try {
-    await connectToDatabase();
+    // 🛑 Paso 1: Conectar y obtener el objeto DB nativo
+    db = await connectToDatabase();
     console.log("Database connection established for orders function.");
   } catch (dbError) {
     console.error("Database Connection Error (orders):", dbError);
@@ -19,7 +35,10 @@ const handler: Handler = async (event, context) => {
         "Access-Control-Allow-Headers": "Content-Type",
         "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
       },
-      body: JSON.stringify({ error: "Failed to connect to database." }),
+      // Usamos el mensaje de error de la función connectToDatabase
+      body: JSON.stringify({
+        error: (dbError as any).message || "Failed to connect to database.",
+      }),
     };
   }
 
@@ -34,48 +53,72 @@ const handler: Handler = async (event, context) => {
   }
 
   try {
+    // 🛑 CAMBIO CLAVE DE TIPADO: Usamos la interfaz PurchaseOrderDocument
+    const collection: Collection<PurchaseOrderDocument> =
+      db.collection(COLLECTION_NAME);
+
+    // Función auxiliar para mapear el ID de MongoDB al formato de frontend
+    const formatOrder = (order: PurchaseOrderDocument | null) => {
+      if (!order) return null;
+
+      // _id ya es un string gracias a la interfaz, no necesitamos .toString()
+      const _idString = order._id;
+      const { _id, ...rest } = order;
+
+      // La propiedad 'id' del frontend es un string, lo extraemos del _id de Mongo
+      return { id: _idString, ...rest };
+    };
+
     if (event.httpMethod === "GET") {
-      const orders = await (PurchaseOrderModel.find as any)().sort({
-        orderDate: -1,
-      });
-      return { statusCode: 200, headers, body: JSON.stringify(orders) };
+      // 🛑 CAMBIO: Usar find() nativo con toArray()
+      const orders = await collection.find().sort({ orderDate: -1 }).toArray();
+      const formattedOrders = orders.map(formatOrder);
+
+      return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify(formattedOrders),
+      };
     }
 
     if (event.httpMethod === "POST") {
       const data = JSON.parse(event.body || "{}");
-      const orderToSave: any = { ...data }; // 🚨 NUEVA LÍNEA DE DEBUG: Muestra la carga útil antes de guardar
+      const orderToSave: any = { ...data };
 
-      console.log(
-        "Order payload before save:",
-        JSON.stringify(orderToSave, null, 2)
-      );
-
+      // 🛑 CAMBIO: Si es nuevo, generamos un ID String (UUID) compatible con Mongo _id
       if (!orderToSave.id) {
+        // Reutilizamos el generador de ID de Mongoose/Mongo para asegurar unicidad
         orderToSave.id = new mongoose.Types.ObjectId().toHexString();
       }
 
-      orderToSave._id = orderToSave.id;
+      // Mapeo de ID
+      const filterId = orderToSave.id; // Guardamos el ID como string
+      orderToSave._id = filterId;
       delete orderToSave.id;
 
-      const updatedOrNewOrder = await (
-        PurchaseOrderModel.findOneAndUpdate as any
-      )({ _id: orderToSave._id }, orderToSave, {
-        new: true,
-        upsert: true,
-        runValidators: true,
-      });
+      // 🛑 CORRECCIÓN: El filtro es ahora tipo string, no hay error de tipado.
+      await collection.updateOne(
+        { _id: filterId }, // filterId es un string (UUID)
+        { $set: orderToSave },
+        { upsert: true }
+      );
 
-      console.log(`Order processed successfully: ${updatedOrNewOrder._id}`);
+      // Leer el documento guardado para devolverlo al frontend
+      const updatedOrder = await collection.findOne({ _id: filterId });
+      const formattedOrder = formatOrder(updatedOrder);
+
+      console.log(`Order processed successfully: ${formattedOrder!.id}`);
       return {
         statusCode: 201,
         headers,
-        body: JSON.stringify(updatedOrNewOrder),
+        body: JSON.stringify(formattedOrder),
       };
     }
 
     if (event.httpMethod === "DELETE") {
       const { id } = event.queryStringParameters || {};
-      await (PurchaseOrderModel.findByIdAndDelete as any)(id);
+      // 🛑 CORRECCIÓN: El filtro es ahora tipo string, no hay error de tipado.
+      await collection.deleteOne({ _id: id });
       return {
         statusCode: 200,
         headers,
