@@ -1,30 +1,34 @@
 import { Handler } from "@netlify/functions";
-import connectToDatabase from "./utils/data"; // Ahora devuelve el objeto DB de MongoClient
-// import { ConfigModel } from "./models"; // Ya no se usa Mongoose
+// Nota: Usamos "./utils/db" (asumiendo que connectToDatabase está ahí y exporta por defecto)
+import connectToDatabase from "./utils/data";
+// Importamos Collection y Document de MongoDB para tipado
 import { Collection, Document } from "mongodb";
 
 // Nombre de la colección donde se guarda la configuración (similar a un singleton)
-const COLLECTION_NAME = "income_sources_config";
+const COLLECTION_NAME = "config";
 const DOCUMENT_ID = "main_config"; // Usamos un ID fijo para el documento único de configuración
 
-// 🛑 Interfaz: Define el documento de configuración (con _id como string para compatibilidad)
+// Interfaz: Define el documento de configuración
 interface ConfigDocument extends Document {
-  _id: string;
+  _id: string; // ID fijo del documento singleton
   incomeSources: { id: string; label: string }[];
 }
 
-const handler: Handler = async (event, context) => {
+// 🛑 CORRECCIÓN CLAVE: Exportación directa para resolver el error de runtime
+export const handler: Handler = async (event, context) => {
   context.callbackWaitsForEmptyEventLoop = false;
   let db;
 
   try {
-    db = await connectToDatabase();
+    // Asumo que connectToDatabase devuelve el cliente MongoClient
+    const client = await connectToDatabase();
+    // Accedemos a la base de datos a través del cliente
+    db = client.db(process.env.MONGO_DB_NAME || "your_database_name");
   } catch (e) {
     console.error("Database Connection Error (config):", e);
     return {
       statusCode: 500,
       headers: { "Access-Control-Allow-Origin": "*" },
-      // Usamos el mensaje de error de la función connectToDatabase
       body: JSON.stringify({
         error: (e as any).message || "Failed to connect to database.",
       }),
@@ -42,16 +46,14 @@ const handler: Handler = async (event, context) => {
   }
 
   try {
-    // 🛑 CAMBIO CLAVE: Usamos la Collection de MongoClient con tipado
+    // Usamos la Collection de MongoClient con tipado
     const collection: Collection<ConfigDocument> =
-      db.collection(COLLECTION_NAME);
+      db.collection(COLLECTION_NAME); // GET: Obtener la lista de fuentes de ingresos
 
-    // GET: Obtener la lista de fuentes de ingresos
     if (event.httpMethod === "GET") {
-      // 🛑 CAMBIO: Usamos findOne nativo de MongoClient
-      const config = await collection.findOne({ _id: DOCUMENT_ID });
+      // Buscamos el documento singleton por su ID fijo
+      const config = await collection.findOne({ _id: DOCUMENT_ID } as any); // Extraemos solo las fuentes de ingresos o un array vacío si no existe el documento
 
-      // Extraemos solo las fuentes de ingresos o un array vacío si no existe el documento
       const sources = config ? config.incomeSources || [] : [];
 
       return {
@@ -59,20 +61,17 @@ const handler: Handler = async (event, context) => {
         headers,
         body: JSON.stringify(sources),
       };
-    }
+    } // POST: Guardar la lista de fuentes de ingresos
 
-    // POST: Guardar la lista de fuentes de ingresos
     if (event.httpMethod === "POST") {
-      const sources = JSON.parse(event.body || "[]");
+      const sources = JSON.parse(event.body || "[]"); // Usamos updateOne con upsert: true y el _id fijo
 
-      // 🛑 CAMBIO: Usamos updateOne con upsert: true y especificamos el _id fijo
       await collection.updateOne(
-        { _id: DOCUMENT_ID },
-        { $set: { incomeSources: sources } },
+        { _id: DOCUMENT_ID }, // Al guardar, nos aseguramos de incluir el _id
+        { $set: { incomeSources: sources, _id: DOCUMENT_ID } },
         { upsert: true }
-      );
+      ); // Devolvemos las fuentes de ingresos guardadas
 
-      // Devolvemos las fuentes de ingresos guardadas
       return {
         statusCode: 201,
         headers,
@@ -90,5 +89,3 @@ const handler: Handler = async (event, context) => {
     };
   }
 };
-
-export { handler };

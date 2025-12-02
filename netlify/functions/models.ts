@@ -61,7 +61,7 @@ InventoryItemSchema.set("toJSON", {
   },
 });
 
-// 🛑 CORRECCIÓN CLAVE AQUÍ: Reforzamiento de campos requeridos para evitar fallos 500
+// 🛑 Reforzamiento de campos requeridos para PurchaseOrderSchema
 const PurchaseOrderSchema = new Schema(
   {
     _id: { type: String, required: true }, // ID generado por el frontend (UUID)
@@ -127,7 +127,7 @@ InventoryRecordSchema.set("toJSON", {
 });
 
 // ----------------------------------------------------
-// --- Definición del Esquema de Configuración Global ---
+// --- Definición del Esquema de Configuración Global (Resuelve ConfigModel) ---
 // ----------------------------------------------------
 
 const ConfigSchema = new Schema(

@@ -1,36 +1,34 @@
 import { Handler } from "@netlify/functions";
-import connectToDatabase from "./utils/data"; // Ahora devuelve el objeto DB de MongoClient
-import { Collection, Document } from "mongodb";
-import mongoose from "mongoose"; // Necesario para generar IDs
+import connectToDatabase from "./utils/data"; // Usamos la importación correcta
+import { PurchaseOrderModel } from "./models";
+import mongoose from "mongoose";
 
-// 🛑 Interfaz: Define el documento de Inventario con _id como string para compatibilidad UUID
-interface InventoryItemDocument extends Document {
-  _id: string;
-  name: string;
-  category: string;
-  stockByLocation: { [key: string]: number };
-}
-
-// Interfaz para documentos de Historial
-interface InventoryRecordDocument extends Document {
-  _id: string;
-  date: string;
-  label: string;
-  type: string;
-  // ... otros campos
-}
-
-const INVENTORY_COLLECTION_NAME = "inventoryitems";
-const HISTORY_COLLECTION_NAME = "inventoryrecords";
-
+// 🛑 CORRECCIÓN: Exportación directa y uso de Mongoose para la validación
 export const handler: Handler = async (event, context) => {
   context.callbackWaitsForEmptyEventLoop = false;
-  let db;
+
+  try {
+    await connectToDatabase();
+    console.log("Database connection established for orders function.");
+  } catch (dbError) {
+    console.error("Database Connection Error (orders):", dbError);
+    return {
+      statusCode: 500,
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Headers": "Content-Type",
+        "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
+      },
+      body: JSON.stringify({
+        error: (dbError as any).message || "Failed to connect to database.",
+      }),
+    };
+  }
 
   const headers = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Headers": "Content-Type",
-    "Access-Control-Allow-Methods": "GET, POST, DELETE, PUT, OPTIONS",
+    "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
   };
 
   if (event.httpMethod === "OPTIONS") {
@@ -38,129 +36,45 @@ export const handler: Handler = async (event, context) => {
   }
 
   try {
-    db = await connectToDatabase();
-  } catch (e) {
-    console.error("Database Connection Error (inventory):", e);
-    return {
-      statusCode: 500,
-      headers,
-      body: JSON.stringify({
-        error: (e as any).message || "Failed to connect to database.",
-      }),
-    };
-  }
-
-  try {
-    const inventoryCollection: Collection<InventoryItemDocument> =
-      db.collection(INVENTORY_COLLECTION_NAME);
-
-    // Función auxiliar para mapear el ID de MongoDB al formato de frontend
-    const formatItem = (item: InventoryItemDocument | null) => {
-      if (!item) return null;
-      const _idString = item._id.toString();
-      const { _id, ...rest } = item;
-      return { id: _idString, ...rest };
-    };
+    const collection = PurchaseOrderModel;
 
     if (event.httpMethod === "GET") {
-      // 🛑 CAMBIO: Usar find() nativo con toArray()
-      const items = await inventoryCollection
-        .find()
-        .sort({ category: 1, name: 1 })
-        .toArray();
-      const formattedItems = items.map(formatItem);
-
-      return { statusCode: 200, headers, body: JSON.stringify(formattedItems) };
+      const orders = await (collection.find as any)().sort({ orderDate: -1 });
+      return {
+        statusCode: 200,
+        headers,
+        body: JSON.stringify(orders),
+      };
     }
 
     if (event.httpMethod === "POST") {
       const data = JSON.parse(event.body || "{}");
-      const itemToSave: any = { ...data };
+      const orderToSave: any = { ...data };
 
-      // Mantenemos la lógica de generar/usar el ID de string para compatibilidad con el frontend
-      let filterId = itemToSave.id || null;
-      if (!filterId) {
-        filterId = new mongoose.Types.ObjectId().toHexString();
+      if (!orderToSave.id) {
+        orderToSave.id = new mongoose.Types.ObjectId().toHexString();
       }
 
-      itemToSave._id = filterId;
-      delete itemToSave.id;
+      orderToSave._id = orderToSave.id;
+      delete orderToSave.id;
 
-      // 🛑 CAMBIO: Usar updateOne nativo para el upsert
-      await inventoryCollection.updateOne(
-        { _id: filterId },
-        { $set: itemToSave },
-        { upsert: true }
+      const updatedOrNewOrder = await (collection.findOneAndUpdate as any)(
+        { _id: orderToSave._id },
+        orderToSave,
+        { new: true, upsert: true, runValidators: true }
       );
 
-      // Leer el documento guardado para devolverlo al frontend
-      const updatedItem = await inventoryCollection.findOne({ _id: filterId });
-      const formattedItem = formatItem(updatedItem);
-
+      console.log(`Order processed successfully: ${updatedOrNewOrder._id}`);
       return {
         statusCode: 201,
         headers,
-        body: JSON.stringify(formattedItem),
-      };
-    }
-
-    if (event.httpMethod === "PUT") {
-      // Manejar actualizaciones masivas de stock (ej. reseteo a 0 o sincronización)
-      const updates: { name: string; stock: number; mode: "set" | "add" }[] =
-        JSON.parse(event.body || "[]");
-
-      if (!Array.isArray(updates) || updates.length === 0) {
-        return {
-          statusCode: 400,
-          headers,
-          body: JSON.stringify({
-            error: "Invalid or empty array of updates provided.",
-          }),
-        };
-      }
-
-      const bulkOps = updates
-        .map((update) => {
-          const fieldToUpdate = `stockByLocation.Almacén`;
-          let updateOperation = {};
-
-          // 🛑 CAMBIO: Usar $set o $inc nativo
-          if (update.mode === "set") {
-            updateOperation = { $set: { [fieldToUpdate]: update.stock } };
-          } else if (update.mode === "add") {
-            updateOperation = { $inc: { [fieldToUpdate]: update.stock } };
-          } else {
-            return null;
-          }
-
-          return {
-            updateOne: {
-              filter: { name: update.name },
-              update: updateOperation,
-            },
-          };
-        })
-        .filter((op) => op !== null);
-
-      if (bulkOps.length > 0) {
-        // 🛑 CAMBIO: Usar bulkWrite nativo
-        await inventoryCollection.bulkWrite(bulkOps as any);
-      }
-
-      return {
-        statusCode: 200,
-        headers,
-        body: JSON.stringify({
-          message: `Bulk update processed for ${bulkOps.length} items.`,
-        }),
+        body: JSON.stringify(updatedOrNewOrder),
       };
     }
 
     if (event.httpMethod === "DELETE") {
       const { id } = event.queryStringParameters || {};
-      // 🛑 CAMBIO: Usar deleteOne nativo
-      await inventoryCollection.deleteOne({ _id: id });
-
+      await (collection.findByIdAndDelete as any)(id);
       return {
         statusCode: 200,
         headers,
@@ -170,7 +84,7 @@ export const handler: Handler = async (event, context) => {
 
     return { statusCode: 405, headers, body: "Method Not Allowed" };
   } catch (error: any) {
-    console.error("Inventory function error:", error);
+    console.error("Error executing orders function:", error);
     return {
       statusCode: 500,
       headers,

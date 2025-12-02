@@ -1,27 +1,17 @@
 import { Handler } from "@netlify/functions";
-import connectToDatabase from "./utils/data"; // Ahora devuelve el objeto DB de MongoClient
-import { Collection, Document } from "mongodb";
-import mongoose from "mongoose"; // 🛑 CORRECCIÓN: Reintroducimos la importación para usar mongoose.Types.ObjectId
+// La importación de connectToDatabase debe ser correcta (asumo que se resolvió en db.ts)
+import connectToDatabase from "./utils/data";
+import { ConfigModel } from "./models";
 
-// Nombre de la colección donde se guardan las sesiones. Mongoose pluraliza 'Session' a 'sessions'.
-const COLLECTION_NAME = "sessions";
-
-// 🛑 Interfaz: Define el documento de sesión con _id como string para compatibilidad UUID
-interface SessionDocument extends Document {
-  _id: string;
-  date: string;
-  description: string;
-  // ... el resto de campos (income, expenses, etc.)
-}
-
-const handler: Handler = async (event, context) => {
+// 🛑 CORRECCIÓN CLAVE: Cambiado de 'const handler' y 'export { handler }' a 'export const handler'
+export const handler: Handler = async (event, context) => {
   context.callbackWaitsForEmptyEventLoop = false;
-  let db;
 
   try {
-    db = await connectToDatabase();
+    await connectToDatabase();
+    console.log("Database connection established for config function.");
   } catch (e) {
-    console.error("Database Connection Error (sessions):", e);
+    console.error("Database Connection Error (config):", e);
     return {
       statusCode: 500,
       headers: { "Access-Control-Allow-Origin": "*" },
@@ -34,7 +24,7 @@ const handler: Handler = async (event, context) => {
   const headers = {
     "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Headers": "Content-Type",
-    "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
   };
 
   if (event.httpMethod === "OPTIONS") {
@@ -42,77 +32,42 @@ const handler: Handler = async (event, context) => {
   }
 
   try {
-    // 🛑 CAMBIO CLAVE: Usamos la Collection de MongoClient con tipado
-    const collection: Collection<SessionDocument> =
-      db.collection(COLLECTION_NAME);
-
-    // Función auxiliar para mapear el ID de MongoDB al formato de frontend
-    const formatSession = (session: SessionDocument | null) => {
-      if (!session) return null;
-      // _id ya es un string gracias a la interfaz
-      const _idString = session._id.toString();
-      const { _id, ...rest } = session;
-      return { id: _idString, ...rest };
-    };
-
+    // GET: Obtener la lista de fuentes de ingresos
     if (event.httpMethod === "GET") {
-      // 🛑 CAMBIO: Usar find() nativo con toArray()
-      const sessions = await collection.find().sort({ date: -1 }).toArray();
-      const formattedSessions = sessions.map(formatSession);
+      // Usamos findOne para obtener el documento de configuración singleton
+      const config = await (ConfigModel.findOne as any)({});
+      const sources = config ? config.incomeSources || [] : [];
+
       return {
         statusCode: 200,
         headers,
-        body: JSON.stringify(formattedSessions),
+        body: JSON.stringify(sources),
       };
-    }
+    } // POST: Guardar la lista de fuentes de ingresos (Upsert)
 
     if (event.httpMethod === "POST") {
-      const data = JSON.parse(event.body || "{}");
-      const sessionToSave: any = { ...data };
+      const sources = JSON.parse(event.body || "[]"); // Encontrar y actualizar el documento de configuración, o crearlo si no existe
 
-      let filterId = sessionToSave.id || null;
-
-      if (!filterId) {
-        // Si es una creación, usamos el generador de IDs string de Mongoose para compatibilidad
-        filterId = new mongoose.Types.ObjectId().toHexString();
-      }
-
-      // Mapeo de ID
-      sessionToSave._id = filterId;
-      delete sessionToSave.id;
-
-      // 🛑 CAMBIO: Usar updateOne con upsert (crea si no existe, actualiza si sí)
-      await collection.updateOne(
-        { _id: filterId },
-        { $set: sessionToSave },
-        { upsert: true }
+      const updatedConfig = await (ConfigModel.findOneAndUpdate as any)(
+        {}, // Filtro vacío
+        { incomeSources: sources },
+        {
+          new: true,
+          upsert: true, // Crea el documento si no existe
+          runValidators: true,
+        }
       );
-
-      // Leer el documento guardado para devolverlo al frontend
-      const updatedSession = await collection.findOne({ _id: filterId });
-      const formattedSession = formatSession(updatedSession);
 
       return {
         statusCode: 201,
         headers,
-        body: JSON.stringify(formattedSession),
-      };
-    }
-
-    if (event.httpMethod === "DELETE") {
-      const { id } = event.queryStringParameters || {};
-      // 🛑 CAMBIO: Usar deleteOne nativo
-      await collection.deleteOne({ _id: id });
-      return {
-        statusCode: 200,
-        headers,
-        body: JSON.stringify({ message: "Deleted" }),
+        body: JSON.stringify(updatedConfig.incomeSources),
       };
     }
 
     return { statusCode: 405, headers, body: "Method Not Allowed" };
   } catch (error: any) {
-    console.error("Error executing sessions function:", error);
+    console.error("Error executing config function:", error);
     return {
       statusCode: 500,
       headers,
@@ -120,5 +75,3 @@ const handler: Handler = async (event, context) => {
     };
   }
 };
-
-export { handler };
