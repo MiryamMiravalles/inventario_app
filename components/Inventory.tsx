@@ -245,7 +245,6 @@ const InventoryComponent: React.FC<InventoryProps> = ({
   >({});
 
   const [analysisDate, setAnalysisDate] = useState("");
-  const [snapshotDate, setSnapshotDate] = useState("");
 
   const [searchTerm, setSearchTerm] = useState("");
 
@@ -964,7 +963,7 @@ const InventoryComponent: React.FC<InventoryProps> = ({
   const tabClasses = (
     tabName: "inventory" | "orders" | "analysis" | "history"
   ) =>
-    `px-4 py-2 text-sm font-medium rounded-md transition-colors duration-200 ${
+    `px-2 py-1 text-xs font-medium rounded-md transition-colors duration-200 ${
       activeTab === tabName
         ? "bg-indigo-600 text-white"
         : "bg-gray-700 text-gray-300 hover:bg-gray-600"
@@ -1170,30 +1169,30 @@ const InventoryComponent: React.FC<InventoryProps> = ({
               </div>
               <button
                 onClick={() => removeOrderItem(index)}
-                className="p-2 bg-red-600 rounded text-white"
+                className="p-1 bg-red-600 rounded text-white h-7 w-7 flex items-center justify-center"
               >
-                <TrashIcon />
+                <TrashIcon className="h-4 w-4" />
               </button>
             </div>
           );
         })}
         <button
           onClick={addOrderItem}
-          className="text-indigo-400 hover:text-indigo-300 text-sm font-semibold"
+          className="text-indigo-400 hover:text-indigo-300 text-xs font-medium mt-1"
         >
           + Añadir Artículo (manualmente)
         </button>
         <div className="flex justify-end p-4 border-t border-gray-700 rounded-b-lg mt-4 bg-gray-800">
           <button
             onClick={closeOrderModal}
-            className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg mr-2 transition duration-300"
+            className="bg-gray-600 hover:bg-gray-700 text-white font-medium py-1.5 px-3.5 rounded-lg mr-2 text-sm transition duration-300"
           >
             Cancelar
           </button>
           <button
             onClick={handleSaveOrder}
             disabled={!canSave}
-            className={`font-bold py-2 px-4 rounded-lg transition duration-300 ${
+            className={`font-medium py-1.5 px-3.5 rounded-lg text-sm transition duration-300 ${
               canSave
                 ? "bg-indigo-600 hover:bg-indigo-700 text-white"
                 : "bg-slate-700 text-slate-500 cursor-not-allowed"
@@ -1209,73 +1208,82 @@ const InventoryComponent: React.FC<InventoryProps> = ({
 
   return (
     <div className="p-4 animate-fade-in">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-white">Gestión de Inventario</h1>
-        <div className="flex gap-2">
-          <div className="bg-gray-800 p-1 rounded-lg flex space-x-1">
-            <button
-              onClick={() => setActiveTab("inventory")}
-              className={tabClasses("inventory")}
-            >
-              Inventario
-            </button>
-            <button
-              onClick={() => setActiveTab("orders")}
-              className={tabClasses("orders")}
-            >
-              Pedidos
-            </button>
-            <button
-              onClick={() => setActiveTab("analysis")}
-              className={tabClasses("analysis")}
-            >
-              Análisis
-            </button>
-            <button
-              onClick={() => setActiveTab("history")}
-              className={tabClasses("history")}
-            >
-              Historial
-            </button>
+      {/* Contenedor Sticky para Título y Tabs */}
+      <div className="sticky top-[64px] z-20 bg-slate-900/90 backdrop-blur-sm pt-2 pb-4">
+        <div className="flex justify-between items-center mb-4">
+          <h1 className="text-2xl font-bold text-white">
+            Gestión de Inventario
+          </h1>
+          <div className="flex gap-1">
+            <div className="bg-gray-800 p-0.5 rounded-lg flex space-x-0.5">
+              {/* Botones de Pestaña */}
+              <button
+                onClick={() => setActiveTab("inventory")}
+                className={tabClasses("inventory")}
+              >
+                Inventario
+              </button>
+              <button
+                onClick={() => setActiveTab("orders")}
+                className={tabClasses("orders")}
+              >
+                Pedidos
+              </button>
+              <button
+                onClick={() => setActiveTab("analysis")}
+                className={tabClasses("analysis")}
+              >
+                Análisis
+              </button>
+              <button
+                onClick={() => setActiveTab("history")}
+                className={tabClasses("history")}
+              >
+                Historial
+              </button>
+            </div>
           </div>
         </div>
       </div>
+      {/* Fin Contenedor Sticky */}
       {activeTab === "inventory" && (
         <div className="space-y-6">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-3">
             <div className="relative w-full md:max-w-xs">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-gray-400">
-                <SearchIcon />
+                <SearchIcon className="h-4 w-4" />
               </div>
               <input
                 type="text"
                 placeholder="Buscar bebida..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="bg-gray-700 text-white rounded-lg pl-10 pr-4 py-2 w-full border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 placeholder-gray-400"
+                className="bg-gray-700 text-white rounded-lg pl-9 pr-3 py-1 w-full text-sm border border-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 placeholder-gray-400"
               />
             </div>
             <div className="flex justify-end items-center gap-2 flex-wrap w-full md:w-auto">
               <button
                 onClick={handleResetInventory}
-                className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2 transition duration-300"
+                className="bg-red-600 hover:bg-red-700 text-white font-medium py-1 px-3 rounded-lg flex items-center gap-1.5 text-sm transition duration-300"
               >
-                <RefreshIcon />
-                <span className="hidden sm:inline">Resetear Inventario</span>
+                <RefreshIcon className="h-4 w-4" />
+                {/* Texto abreviado para móvil */}
+                <span className="hidden md:inline">Resetear</span>
               </button>
               <button
                 onClick={handleSaveInventorySnapshot}
-                className="bg-violet-600 hover:bg-violet-700 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2 transition duration-300"
+                className="bg-violet-600 hover:bg-violet-700 text-white font-medium py-1 px-3 rounded-lg flex items-center gap-1.5 text-sm transition duration-300"
               >
-                <InventoryIcon />
-                <span className="hidden sm:inline">Guardar Inventario</span>
+                <InventoryIcon className="h-4 w-4" />
+                {/* Texto abreviado para móvil */}
+                <span className="hidden md:inline">Guardar</span>
               </button>
               <button
                 onClick={() => openInventoryModal(undefined)}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2 transition duration-300"
+                className="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-1 px-3 rounded-lg flex items-center gap-1.5 text-sm transition duration-300"
               >
-                <PlusIcon />
-                <span className="hidden sm:inline">Nuevo Artículo</span>
+                <PlusIcon className="h-4 w-4" />
+                <span className="hidden md:inline">Nuevo Producto</span>
               </button>
             </div>
           </div>
@@ -1302,23 +1310,24 @@ const InventoryComponent: React.FC<InventoryProps> = ({
                     <table className="min-w-full">
                       <thead>
                         <tr>
-                          <th className="px-2 py-1 text-left text-xs font-medium text-gray-300 uppercase sticky left-0 bg-slate-800 z-10 w-[180px]">
+                          <th className="p-1 text-left text-xs font-medium text-gray-300 uppercase sticky left-0 bg-slate-800 z-10 w-[120px] sm:w-[180px]">
                             NOMBRE
                           </th>
                           {INVENTORY_LOCATIONS.map((loc) => (
                             <th
-                              className="px-2 py-1 text-center text-[10px] font-medium text-gray-300 uppercase w-[70px] whitespace-nowrap overflow-hidden text-ellipsis"
+                              className="p-1 text-center text-[10px] font-medium text-gray-300 uppercase w-[40px] sm:w-[70px] whitespace-nowrap overflow-hidden text-ellipsis" // W: 40px en móvil
                               key={loc}
+                              title={loc}
                             >
                               {loc.length > 8
-                                ? loc.substring(0, 7).toUpperCase()
+                                ? loc.substring(0, 5).toUpperCase() + "."
                                 : loc.toUpperCase()}
                             </th>
                           ))}
-                          <th className="px-2 py-1 text-center text-xs font-medium text-gray-300 uppercase w-20">
+                          <th className="p-1 text-center text-xs font-medium text-gray-300 uppercase w-[40px] sm:w-20">
                             TOTAL
                           </th>
-                          <th className="px-2 py-1 text-right text-xs font-medium text-gray-300 uppercase w-20">
+                          <th className="p-1 text-right text-xs font-medium text-gray-300 uppercase w-10 sm:w-20">
                             ACCIONES
                           </th>
                         </tr>
@@ -1326,13 +1335,13 @@ const InventoryComponent: React.FC<InventoryProps> = ({
                       <tbody className="divide-y divide-gray-700/50">
                         {items.map((item) => (
                           <tr key={item.id} className="hover:bg-gray-700/50">
-                            <td className="px-2 py-1 whitespace-nowrap text-sm font-medium text-white sticky left-0 bg-slate-800 z-10 w-[180px]">
+                            <td className="p-1 whitespace-nowrap text-sm font-medium text-white sticky left-0 bg-slate-800 z-10 w-[120px] sm:w-[180px]">
                               {item.name}
                             </td>
                             {INVENTORY_LOCATIONS.map((loc) => (
                               <td
                                 key={loc}
-                                className="px-2 py-1 whitespace-nowrap w-[70px]"
+                                className="p-1 whitespace-nowrap w-[40px] sm:w-[70px]"
                               >
                                 <input
                                   type="text"
@@ -1354,12 +1363,12 @@ const InventoryComponent: React.FC<InventoryProps> = ({
                                     )
                                   }
                                   onBlur={() => handleStockInputBlur(item, loc)}
-                                  className="bg-slate-700 text-white rounded p-0.5 w-14 text-center text-sm border border-slate-600"
+                                  className="bg-slate-700 text-white rounded p-0.5 w-8 sm:w-14 text-center text-xs sm:text-sm border border-slate-600"
                                   placeholder="0"
                                 />
                               </td>
                             ))}
-                            <td className="px-4 py-2 whitespace-nowrap text-lg font-bold w-20">
+                            <td className="p-1 text-center whitespace-nowrap text-lg font-bold w-[40px] sm:w-20">
                               <span
                                 className={
                                   calculateTotalStock(item) > 0.001
@@ -1372,7 +1381,7 @@ const InventoryComponent: React.FC<InventoryProps> = ({
                                   .replace(".", ",")}
                               </span>
                             </td>
-                            <td className="px-4 py-2 whitespace-nowrap text-right text-sm w-20">
+                            <td className="p-1 whitespace-nowrap text-right text-sm w-10 sm:w-20">
                               <button
                                 onClick={() => openInventoryModal(item)}
                                 className="text-indigo-400 mr-1"
@@ -1405,10 +1414,10 @@ const InventoryComponent: React.FC<InventoryProps> = ({
           <div className="text-right mb-4">
             <button
               onClick={() => openOrderModal()}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2 transition duration-300 ml-auto"
+              className="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-1 px-3 rounded-lg flex items-center gap-1.5 text-sm transition duration-300 ml-auto"
             >
-              <PlusIcon />
-              <span className="hidden sm:inline">Nuevo Pedido</span>
+              <PlusIcon className="h-4 w-4" />
+              <span className="hidden md:inline">Nuevo Pedido</span>
             </button>
           </div>
           <div className="bg-gray-800 shadow-xl rounded-lg overflow-x-auto">
@@ -1457,7 +1466,7 @@ const InventoryComponent: React.FC<InventoryProps> = ({
                       {order.status === PurchaseOrderStatus.Pending && (
                         <button
                           onClick={() => handleReceiveOrder(order)}
-                          className="px-2 py-1 bg-green-600/30 text-green-400 hover:bg-green-600 hover:text-white rounded text-xs font-bold transition duration-300"
+                          className="px-1.5 py-0.5 bg-green-600/30 text-green-400 hover:bg-green-600 hover:text-white rounded text-xs font-medium transition duration-300"
                         >
                           Recibir
                         </button>
@@ -1467,10 +1476,10 @@ const InventoryComponent: React.FC<InventoryProps> = ({
                         <span className="text-green-400 font-bold">OK</span>
                       )}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
+                    <td className="px-4 py-2 whitespace-nowrap text-right text-sm">
                       <button
                         onClick={() => openOrderModal(order)}
-                        className="text-indigo-400 mr-4"
+                        className="text-indigo-400 mr-2 h-4 w-4"
                       >
                         <PencilIcon />
                       </button>
@@ -1480,7 +1489,7 @@ const InventoryComponent: React.FC<InventoryProps> = ({
                             "¿Seguro que quieres eliminar este pedido?"
                           ) && onDeletePurchaseOrder(order.id)
                         }
-                        className="text-red-500"
+                        className="text-red-500 h-4 w-4"
                       >
                         <TrashIcon />
                       </button>
@@ -1501,7 +1510,7 @@ const InventoryComponent: React.FC<InventoryProps> = ({
             <div className="flex items-center gap-2 flex-wrap">
               <button
                 onClick={handleSaveCurrentInventory}
-                className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2 transition duration-300"
+                className="bg-green-600 hover:bg-green-700 text-white font-medium py-1 px-3 rounded-lg text-sm transition duration-300"
               >
                 Guardar Análisis de Consumo
               </button>
@@ -1597,7 +1606,7 @@ const InventoryComponent: React.FC<InventoryProps> = ({
             </h2>
             <button
               onClick={handleDeleteAllHistory}
-              className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2 transition duration-300"
+              className="bg-red-600 hover:bg-red-700 text-white font-medium py-1 px-3 rounded-lg flex items-center gap-1.5 text-sm transition duration-300"
             >
               <TrashIcon /> Borrar Historial Completo
             </button>

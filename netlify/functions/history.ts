@@ -1,26 +1,21 @@
 // netlify/functions/history.ts
 import { Handler } from "@netlify/functions";
-// 🛑 CORRECCIÓN: Asumo que connectToDatabase devuelve el objeto DB nativo
 import connectToDatabase from "./utils/data";
 import mongoose from "mongoose";
-// Importamos Collection y Document de MongoDB para tipado
-import { Collection, Document } from "mongodb"; // MongoClient ya no es necesario aquí
+import { Collection, Document } from "mongodb";
 
-// Nombre de la colección (pluralizado por convención de Mongoose)
 const COLLECTION_NAME = "inventoryrecords";
 
-// 🛑 Interfaz: Define el documento de historial con _id como string para compatibilidad UUID
 interface InventoryRecordDocument extends Document {
   _id: string;
   date: string;
   label: string;
-  type: string; // El campo 'items' se mapea automáticamente.
+  type: string;
 }
 
-// 🛑 CORRECCIÓN CLAVE: Exportación directa para resolver el error de runtime
 export const handler: Handler = async (event, context) => {
   context.callbackWaitsForEmptyEventLoop = false;
-  let db: any; // Usaremos 'any' para el objeto DB devuelto por el cliente
+  let db: any;
 
   const headers = {
     "Access-Control-Allow-Origin": "*",
@@ -33,8 +28,6 @@ export const handler: Handler = async (event, context) => {
   }
 
   try {
-    // 🛑 CAMBIO CLAVE: connectToDatabase devuelve el objeto DB directamente.
-    // Eliminamos la lógica de dbName y la llamada a .db(), que causaba el TypeError.
     db = await connectToDatabase();
   } catch (dbError) {
     console.error("Database Connection Error (history):", dbError);
@@ -48,20 +41,17 @@ export const handler: Handler = async (event, context) => {
   }
 
   try {
-    // Usamos la Collection de MongoClient con tipado
     const collection: Collection<InventoryRecordDocument> =
-      db.collection(COLLECTION_NAME); // Función auxiliar para mapear el ID de MongoDB al formato de frontend
+      db.collection(COLLECTION_NAME);
 
     const formatRecord = (record: InventoryRecordDocument | null) => {
       if (!record) return null;
-      // La colección usa _id: string, por lo que usamos _id directamente
       const _idString = record._id.toString();
       const { _id, ...rest } = record;
       return { id: _idString, ...rest };
     };
 
     if (event.httpMethod === "GET") {
-      // Usar find() nativo y toArray() para obtener el historial ordenado
       const records = await collection.find().sort({ date: -1 }).toArray();
       const formattedRecords = records.map(formatRecord);
 
@@ -79,22 +69,21 @@ export const handler: Handler = async (event, context) => {
       let filterId = recordToSave.id || null;
 
       if (!filterId) {
-        // Si es nuevo, generamos un ID String (UUID) compatible
         filterId = new mongoose.Types.ObjectId().toHexString();
       }
 
       recordToSave._id = filterId;
-      delete recordToSave.id; // Aseguramos que la fecha existe
+      delete recordToSave.id;
 
       if (!recordToSave.date) {
         recordToSave.date = new Date().toISOString();
-      } // Usar updateOne con upsert para manejar tanto la creación como la actualización
+      }
 
       await collection.updateOne(
         { _id: filterId },
         { $set: recordToSave },
         { upsert: true }
-      ); // Leer el documento guardado para devolverlo al frontend
+      );
 
       const newRecord = await collection.findOne({ _id: filterId });
       const formattedRecord = formatRecord(newRecord);
@@ -107,10 +96,10 @@ export const handler: Handler = async (event, context) => {
     }
 
     if (event.httpMethod === "DELETE") {
-      const { id } = event.queryStringParameters || {};
+      const id = event.queryStringParameters?.id;
 
       if (id) {
-        // Borrar un solo registro (usando el ID del query string)
+        // Borrar un solo registro
         await collection.deleteOne({ _id: id });
         return {
           statusCode: 200,
@@ -118,7 +107,7 @@ export const handler: Handler = async (event, context) => {
           body: JSON.stringify({ message: "Deleted single record" }),
         };
       } else {
-        // Borrar TODOS los registros (cuando no se proporciona 'id')
+        // Borrar TODOS los registros (borrado completo)
         await collection.deleteMany({});
         return {
           statusCode: 200,
