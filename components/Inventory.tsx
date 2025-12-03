@@ -479,18 +479,20 @@ const InventoryComponent: React.FC<InventoryProps> = ({
   }; // 🛑 CORRECCIÓN: Generar ID y asegurar el tipo final antes de guardar.
 
   const handleSaveOrder = () => {
-    const hasValidItems = currentPurchaseOrder.items.every(
+    const hasItems = currentPurchaseOrder.items.length > 0; // 🛑 NUEVO: Debe haber artículos
+
+    const allItemsAreValid = currentPurchaseOrder.items.every(
       (item) => item.quantity > 0.001 && item.inventoryItemId.trim() !== ""
     );
     const hasSupplierName = currentPurchaseOrder.supplierName.trim() !== "";
 
-    if (!hasValidItems || !hasSupplierName) {
+    if (!hasSupplierName || !hasItems || !allItemsAreValid) {
+      // 🛑 Validación estricta
       alert(
-        "Por favor, introduce el proveedor y asegúrate de que todos los artículos tienen cantidad positiva y están seleccionados."
+        "Por favor, introduce el proveedor y asegúrate de que el pedido contiene al menos un artículo válido (cantidad positiva y seleccionado)."
       );
       return;
     }
-
     const orderToSave: PurchaseOrder = {
       ...currentPurchaseOrder,
       id: (currentPurchaseOrder as PurchaseOrder).id || crypto.randomUUID(),
@@ -1005,26 +1007,30 @@ const InventoryComponent: React.FC<InventoryProps> = ({
 
   const renderOrderForm = () => {
     // 🛑 CORRECCIÓN: Validamos que haya nombre de proveedor Y que todos los ítems tengan ID y cantidad > 0
-    const hasValidItems = currentPurchaseOrder.items.every(
+
+    // 1. Debe haber al menos un artículo en la lista.
+    const hasItems = currentPurchaseOrder.items.length > 0;
+
+    // 2. Que todos los artículos añadidos sean válidos (cantidad > 0.001 Y artículo seleccionado).
+    const allItemsAreValid = currentPurchaseOrder.items.every(
       (item) => item.quantity > 0.001 && item.inventoryItemId.trim() !== ""
     );
-    const hasItemsWithQuantity = currentPurchaseOrder.items.some(
-      (item) => item.quantity > 0.001
-    );
+
+    // 3. Que haya un nombre de proveedor.
     const hasSupplierName = currentPurchaseOrder.supplierName.trim() !== "";
 
-    const canSave = hasValidItems && hasSupplierName;
+    // El botón se activa solo si: hay proveedor Y hay artículos Y todos los artículos son válidos.
+    const canSave = hasSupplierName && hasItems && allItemsAreValid; // 🛑 Lógica de activación corregida
 
     let disabledTitle = "Guardar pedido";
 
     if (!hasSupplierName) {
       disabledTitle = "Introduce el proveedor para guardar";
-    } else if (!hasItemsWithQuantity) {
+    } else if (!hasItems) {
+      disabledTitle = "Añade al menos un artículo al pedido para guardar"; // 🛑 Mensaje actualizado
+    } else if (!allItemsAreValid) {
       disabledTitle =
-        "Añade al menos un artículo con cantidad > 0 para guardar";
-    } else if (!hasValidItems) {
-      disabledTitle =
-        "Asegúrate de que todos los artículos tienen cantidad y están seleccionados";
+        "Asegúrate de que todos los artículos tienen cantidad positiva y están seleccionados";
     }
 
     return (
