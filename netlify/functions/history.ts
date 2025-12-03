@@ -1,9 +1,10 @@
+// netlify/functions/history.ts
 import { Handler } from "@netlify/functions";
-// 🛑 CORRECCIÓN: Asumo que connectToDatabase devuelve el CLIENTE MongoClient
+// 🛑 CORRECCIÓN: Asumo que connectToDatabase devuelve el objeto DB nativo
 import connectToDatabase from "./utils/data";
-import mongoose from "mongoose"; // Necesario para generar IDs
+import mongoose from "mongoose";
 // Importamos Collection y Document de MongoDB para tipado
-import { Collection, Document, MongoClient } from "mongodb";
+import { Collection, Document } from "mongodb"; // MongoClient ya no es necesario aquí
 
 // Nombre de la colección (pluralizado por convención de Mongoose)
 const COLLECTION_NAME = "inventoryrecords";
@@ -32,14 +33,9 @@ export const handler: Handler = async (event, context) => {
   }
 
   try {
-    // 🛑 CAMBIO CLAVE: connectToDatabase devuelve el CLIENTE
-    const client: MongoClient = await connectToDatabase();
-    // Accedemos a la base de datos a través del cliente
-    // El nombre de la base de datos se debe obtener de la variable MONGO_URI
-    const dbName = new URL(
-      process.env.MONGO_URI || "mongodb://localhost/test"
-    ).pathname.substring(1);
-    db = client.db(dbName);
+    // 🛑 CAMBIO CLAVE: connectToDatabase devuelve el objeto DB directamente.
+    // Eliminamos la lógica de dbName y la llamada a .db(), que causaba el TypeError.
+    db = await connectToDatabase();
   } catch (dbError) {
     console.error("Database Connection Error (history):", dbError);
     return {
@@ -58,6 +54,7 @@ export const handler: Handler = async (event, context) => {
 
     const formatRecord = (record: InventoryRecordDocument | null) => {
       if (!record) return null;
+      // La colección usa _id: string, por lo que usamos _id directamente
       const _idString = record._id.toString();
       const { _id, ...rest } = record;
       return { id: _idString, ...rest };

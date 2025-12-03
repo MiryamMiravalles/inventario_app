@@ -1,5 +1,6 @@
+// netlify/functions/config.ts
 import { Handler } from "@netlify/functions";
-// Nota: Usamos "./utils/db" (asumiendo que connectToDatabase está ahí y exporta por defecto)
+// Nota: Usamos "./utils/data" (asumiendo que connectToDatabase devuelve la DB nativa)
 import connectToDatabase from "./utils/data";
 // Importamos Collection y Document de MongoDB para tipado
 import { Collection, Document } from "mongodb";
@@ -17,13 +18,11 @@ interface ConfigDocument extends Document {
 // 🛑 CORRECCIÓN CLAVE: Exportación directa para resolver el error de runtime
 export const handler: Handler = async (event, context) => {
   context.callbackWaitsForEmptyEventLoop = false;
-  let db;
+  let db: any;
 
   try {
-    // Asumo que connectToDatabase devuelve el cliente MongoClient
-    const client = await connectToDatabase();
-    // Accedemos a la base de datos a través del cliente
-    db = client.db(process.env.MONGO_DB_NAME || "your_database_name");
+    // 🛑 CAMBIO CLAVE: connectToDatabase devuelve el objeto DB directamente.
+    db = await connectToDatabase();
   } catch (e) {
     console.error("Database Connection Error (config):", e);
     return {
